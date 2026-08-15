@@ -1,0 +1,206 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  ChronoFlow tasarım dili
+  ----------------------
+  Kural: RENK YALNIZCA VERİYİ ANLATIR.
+  Altı kategori rengi (mavi/yeşil/sarı/kırmızı/mor/gri) zaten renk çemberinin
+  çoğunu kaplıyor. Bu yüzden arayüzün geri kalanı bilinçli olarak akromatik:
+  soğuk kağıt, mürekkep ve üç kademeli cetvel çizgisi. Sayfadaki en yüksek
+  kontrast noktası "şimdi" çizgisidir — çünkü en önemli bilgi odur.
+*/
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+
+  /* Zaman tüneline özel tokenlar */
+  --color-canvas: var(--canvas);
+  --color-rule: var(--rule);
+  --color-rule-soft: var(--rule-soft);
+  --color-tick: var(--tick);
+  --color-now: var(--now);
+  --color-now-contrast: var(--now-contrast);
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Kağıt (sayfa) / tuval (takvim yüzeyi) ayrımı: bloklar tuvalde yüzer. */
+  --background: #eef0f4;
+  --canvas: #ffffff;
+  --foreground: #12151c;
+
+  --rule: #e2e6ed; /* saat çizgisi */
+  --rule-soft: #eef1f5; /* yarım saat çizgisi */
+  --tick: #b4bcca; /* cetvel çentiği */
+  --now: #12151c; /* şimdi çizgisi = mürekkep */
+  --now-contrast: #ffffff;
+
+  --card: #ffffff;
+  --card-foreground: #12151c;
+  --popover: #ffffff;
+  --popover-foreground: #12151c;
+  --primary: #12151c;
+  --primary-foreground: #ffffff;
+  --secondary: #e6e9ef;
+  --secondary-foreground: #12151c;
+  --muted: #e6e9ef;
+  --muted-foreground: #67718a;
+  --accent: #e6e9ef;
+  --accent-foreground: #12151c;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #dfe3ea;
+  --input: #dfe3ea;
+  --ring: #9aa4b8;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #12151c;
+  --sidebar-primary: #12151c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e6e9ef;
+  --sidebar-accent-foreground: #12151c;
+  --sidebar-border: #dfe3ea;
+  --sidebar-ring: #9aa4b8;
+}
+
+.dark {
+  --background: #080a0e;
+  --canvas: #11141a;
+  --foreground: #e8ebf0;
+
+  --rule: #1f242e;
+  --rule-soft: #171b23;
+  --tick: #3b4353;
+  --now: #f2f4f7;
+  --now-contrast: #11141a;
+
+  --card: #11141a;
+  --card-foreground: #e8ebf0;
+  --popover: #171b23;
+  --popover-foreground: #e8ebf0;
+  --primary: #e8ebf0;
+  --primary-foreground: #11141a;
+  --secondary: #1c212a;
+  --secondary-foreground: #e8ebf0;
+  --muted: #1c212a;
+  --muted-foreground: #8a94a6;
+  --accent: #1c212a;
+  --accent-foreground: #e8ebf0;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #232936;
+  --input: #232936;
+  --ring: #4a5468;
+  --sidebar: #11141a;
+  --sidebar-foreground: #e8ebf0;
+  --sidebar-primary: #e8ebf0;
+  --sidebar-primary-foreground: #11141a;
+  --sidebar-accent: #1c212a;
+  --sidebar-accent-foreground: #e8ebf0;
+  --sidebar-border: #232936;
+  --sidebar-ring: #4a5468;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Saat rakamları hizada kalsın diye tüm arayüzde tabular rakam. */
+    font-variant-numeric: tabular-nums;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+@layer utilities {
+  /* Zaman tünelinin kaydırma çubuğu: ince ve sessiz. */
+  .scrollbar-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: var(--tick) transparent;
+  }
+  .scrollbar-quiet::-webkit-scrollbar {
+    width: 10px;
+  }
+  .scrollbar-quiet::-webkit-scrollbar-thumb {
+    background-color: var(--tick);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+}
+
+@keyframes chrono-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: chrono-rise 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

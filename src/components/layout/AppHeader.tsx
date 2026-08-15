@@ -1,0 +1,104 @@
+'use client';
+
+import { isToday } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { DAY_END_MINUTE } from '@/lib/constants';
+import { findFreeSlots, getAvailableDuration } from '@/lib/scheduler';
+import {
+  formatDayLabel,
+  formatDuration,
+  getDurationMinutes,
+  toDayMinutes,
+} from '@/lib/time';
+import { useTaskStore, useTasksForSelectedDay } from '@/store/useTaskStore';
+
+export function AppHeader() {
+  const tasks = useTasksForSelectedDay();
+  const allTasks = useTaskStore((s) => s.tasks);
+  const day = useTaskStore((s) => s.selectedDate);
+  const goToPrevDay = useTaskStore((s) => s.goToPrevDay);
+  const goToNextDay = useTaskStore((s) => s.goToNextDay);
+  const goToToday = useTaskStore((s) => s.goToToday);
+  const openCreateEditor = useTaskStore((s) => s.openCreateEditor);
+
+  const plannedMinutes = tasks
+    .filter((t) => t.category !== 'BUFFER')
+    .reduce((sum, t) => sum + getDurationMinutes(t), 0);
+  const bufferMinutes = tasks
+    .filter((t) => t.category === 'BUFFER')
+    .reduce((sum, t) => sum + getDurationMinutes(t), 0);
+  const freeMinutes = DAY_END_MINUTE - plannedMinutes - bufferMinutes;
+
+  /** Klavye ile ekleme yolu: şu andan sonraki ilk uygun boşlukla pencereyi açar. */
+  const openEditorAtNextFreeSlot = () => {
+    const from = isToday(day) ? toDayMinutes(new Date()) : 9 * 60;
+    const slot =
+      findFreeSlots(allTasks, day, { from, minDuration: 30 })[0] ??
+      findFreeSlots(allTasks, day, { minDuration: 30 })[0];
+    const start = slot ? slot.start : from;
+    openCreateEditor(start, getAvailableDuration(allTasks, day, start, 60));
+  };
+
+  return (
+    <header className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="space-y-1.5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
+          ChronoFlow
+        </p>
+        <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
+          {formatDayLabel(day)}
+        </h1>
+        <p className="font-mono text-xs text-muted-foreground">
+          {formatDuration(plannedMinutes)} planlı
+          <span className="mx-1.5 opacity-40">·</span>
+          {formatDuration(bufferMinutes)} tampon
+          <span className="mx-1.5 opacity-40">·</span>
+          {formatDuration(freeMinutes)} boş
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="flex items-center rounded-md border bg-canvas">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-r-none"
+            onClick={goToPrevDay}
+            aria-label="Önceki gün"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-none border-x px-3 text-xs font-medium"
+            onClick={goToToday}
+            disabled={isToday(day)}
+          >
+            Bugün
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-l-none"
+            onClick={goToNextDay}
+            aria-label="Sonraki gün"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+
+        <Button
+          size="sm"
+          className="h-8 gap-1.5 px-3 text-xs"
+          onClick={openEditorAtNextFreeSlot}
+        >
+          <Plus className="size-3.5" />
+          Blok ekle
+        </Button>
+      </div>
+    </header>
+  );
+}
