@@ -1,6 +1,7 @@
 'use client';
 
 import { SyncStatus } from '@/components/layout/SyncStatus';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTaskStore } from '@/store/useTaskStore';
@@ -37,6 +38,7 @@ export function CategoryLegend() {
 
       <div className="flex items-center gap-1">
         <SyncStatus />
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

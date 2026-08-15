@@ -111,7 +111,7 @@ function SignInScreen() {
           {error && (
             <p
               role="alert"
-              className="rounded-md bg-amber-100 px-3 py-2 text-[13px] leading-snug text-amber-900"
+              className="rounded-md bg-amber-100 px-3 py-2 text-[13px] leading-snug text-amber-900 dark:bg-amber-500/15 dark:text-amber-200"
             >
               {error}
             </p>

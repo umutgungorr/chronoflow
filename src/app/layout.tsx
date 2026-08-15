@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 /*
   İki yazı karakteri, iki net görev:
@@ -32,8 +33,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="tr"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
+      // Tema betiği <html> sınıfını sunucudan farklı hale getirebilir.
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {/* React yüklenmeden çalışır: açık temanın bir kare görünüp
+            karanlığa atlamasını (flash) engeller. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {children}
+      </body>
     </html>
   );
 }
