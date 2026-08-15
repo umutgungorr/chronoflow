@@ -29,14 +29,28 @@ type AuthActions = {
   clearError: () => void;
 };
 
-/** Supabase hata mesajlarını okunur Türkçeye çevirir. */
-function translateError(message: string): string {
+/**
+ * Supabase hata mesajlarını okunur Türkçeye çevirir.
+ *
+ * Mümkün olduğunda `code` üzerinden eşleştiriyoruz: metin sürümle değişebilir,
+ * kod sabit kalır.
+ */
+function translateError(message: string, code?: string): string {
+  if (code === 'signup_disabled') return 'Yeni kayıt kapalı. Hesabın varsa giriş yap.';
+  if (code === 'invalid_credentials') return 'E-posta veya şifre hatalı.';
+  if (code === 'user_already_exists') return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  if (code === 'weak_password') return 'Şifre en az 6 karakter olmalı.';
+
   const lower = message.toLowerCase();
   if (lower.includes('invalid login credentials')) {
     return 'E-posta veya şifre hatalı.';
   }
   if (lower.includes('user already registered') || lower.includes('already been registered')) {
     return 'Bu e-posta zaten kayıtlı. Giriş yap.';
+  }
+  // Supabase'de "Allow new users to sign up" kapalıyken gelen yanıt.
+  if (lower.includes('signups not allowed') || lower.includes('signup is disabled')) {
+    return 'Yeni kayıt kapalı. Hesabın varsa giriş yap.';
   }
   if (lower.includes('password should be at least')) {
     return 'Şifre en az 6 karakter olmalı.';
@@ -92,7 +106,10 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     if (!supabase) return false;
     set({ busy: true, error: null });
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    set({ busy: false, error: error ? translateError(error.message) : null });
+    set({
+      busy: false,
+      error: error ? translateError(error.message, error.code) : null,
+    });
     return !error;
   },
 
@@ -102,7 +119,7 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
-      set({ busy: false, error: translateError(error.message) });
+      set({ busy: false, error: translateError(error.message, error.code) });
       return false;
     }
 
