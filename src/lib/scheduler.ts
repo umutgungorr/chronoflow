@@ -56,56 +56,51 @@ export function withDuration(task: Task, durationMinutes: number): Task {
  * kalanındaki her bloğu 30dk kaydırırdı. ChronoFlow bunun yerine önce
  * TAMPON (BUFFER) blokları kısaltarak darbeyi emer.
  *
- * Algoritma (çapa görevden itibaren ileriye doğru tek geçiş):
+ * Zincir İKİ YÖNE de işler. Bir bloğu aşağı sürüklersen sonrakiler ileri,
+ * yukarı sürüklersen öncekiler geriye itilir. Tek yönlü olsaydı davranış
+ * asimetrik olurdu: aşağı sürükleyince plan kendini toparlar, yukarı
+ * sürükleyince bloklar üst üste binerdi.
  *
- *   cursor = çapa görevin bitiş dakikası
+ * Her iki geçiş de aynı dört kuralı uygular (yönü ters çevirerek):
+ *
+ *   cursor = çapanın o yöndeki kenarı
  *   sıradaki her görev için:
- *     1. Görev cursor'dan sonra başlıyorsa   -> arada boşluk var, iş bitti, dur.
+ *     1. Arada boşluk varsa                  -> taşma yutuldu, dur.
  *     2. Görev BUFFER ise                    -> taşma kadar KISALT (emilim).
  *          • kalan süre >= 15dk  -> tampon kısalır, taşma tamamen emildi, dur.
  *          • kalan süre <  15dk  -> tampon tamamen tükenir (silinir),
  *                                   kalan taşma bir sonraki göreve devreder.
  *     3. Görev isFixed ise                   -> kaydırılamaz. Çakışma raporlanır,
  *                                              zincir orada kırılır.
- *     4. Aksi halde                          -> görev taşma kadar ileri kayar.
+ *     4. Aksi halde                          -> görev taşma kadar kayar.
  *
  * Dönüş: yeni görev listesi + hangi blokların kaydığı/emildiği + çakışma mesajı.
  * UI bu raporu kullanarak kullanıcıya "2 blok kaydı, 30dk tampondan yendi"
  * gibi geri bildirim gösterir.
  */
-export function reflow(allTasks: Task[], anchorId: string): ScheduleResult {
-  const anchor = allTasks.find((t) => t.id === anchorId);
-  if (!anchor) {
-    return { tasks: allTasks, shiftedTaskIds: [], absorbedBufferIds: [], conflict: null };
-  }
 
-  // Sadece çapa görevle aynı gündeki blokları hesaba katıyoruz.
-  const sameDay = sortByStart(allTasks.filter((t) => isTaskOnDay(t, anchor.startTime)));
-  const otherDays = allTasks.filter((t) => !isTaskOnDay(t, anchor.startTime));
+/** İki geçişin ortak defteri. */
+type RippleLog = {
+  shiftedTaskIds: string[];
+  absorbedBufferIds: string[];
+  removedIds: Set<string>;
+  conflict: string | null;
+};
 
-  const shiftedTaskIds: string[] = [];
-  const absorbedBufferIds: string[] = [];
-  const removedIds = new Set<string>();
-  let conflict: string | null = null;
-
-  // Çapa görevden sonraki (veya aynı anda başlayan ama çapa olmayan) bloklar.
-  const anchorIndex = sameDay.findIndex((t) => t.id === anchorId);
-  const result = [...sameDay];
-
+/** Çapadan SONRAKİ blokları ileri iter. */
+function rippleForward(result: Task[], anchorIndex: number, log: RippleLog): void {
   // İmleç: bu dakikadan önce yeni bir blok başlayamaz.
-  let cursor = getEndMinutes(anchor);
+  let cursor = getEndMinutes(result[anchorIndex]);
 
   for (let i = anchorIndex + 1; i < result.length; i++) {
     const current = result[i];
     const start = getStartMinutes(current);
     const duration = getDurationMinutes(current);
 
-    // (1) Boşluk var: taşma doğal olarak yutuldu, zincir burada biter.
     if (start >= cursor) break;
 
     const overflow = cursor - start;
 
-    // (2) Tampon: önce kısalarak darbeyi emer.
     if (current.category === 'BUFFER') {
       const remaining = duration - overflow;
 
@@ -116,36 +111,110 @@ export function reflow(allTasks: Task[], anchorId: string): ScheduleResult {
           startTime: fromDayMinutes(current.startTime, cursor),
           endTime: fromDayMinutes(current.startTime, cursor + remaining),
         };
-        absorbedBufferIds.push(current.id);
-        cursor = cursor + remaining;
-        break; // taşma bitti -> sonraki bloklara dokunma
+        log.absorbedBufferIds.push(current.id);
+        break;
       }
 
-      // Tampon tamamen tükendi: bloğu kaldır, kalan taşma devam etsin.
-      removedIds.add(current.id);
-      absorbedBufferIds.push(current.id);
+      log.removedIds.add(current.id);
+      log.absorbedBufferIds.push(current.id);
       continue; // cursor değişmez; kalan taşma bir sonraki bloğa uygulanır
     }
 
-    // (3) Sabit görev: kaydırılamaz, zincir kırılır.
     if (current.isFixed) {
-      conflict = `"${current.title}" sabit bir görev olduğu için kaydırılamadı; ${overflow} dakikalık çakışma var.`;
+      log.conflict = `"${current.title}" sabit bir görev olduğu için kaydırılamadı; ${overflow} dakikalık çakışma var.`;
       break;
     }
 
-    // (4) Normal görev: taşma kadar ileri kaydır.
     const newStart = Math.min(cursor, DAY_END_MINUTE - duration);
     result[i] = withStartMinutes(current, newStart);
-    shiftedTaskIds.push(current.id);
+    log.shiftedTaskIds.push(current.id);
     cursor = newStart + duration;
   }
+}
 
-  const cleaned = result.filter((t) => !removedIds.has(t.id));
+/** Çapadan ÖNCEKİ blokları geriye iter — ileri geçişin aynası. */
+function rippleBackward(result: Task[], anchorIndex: number, log: RippleLog): void {
+  // İmleç: hiçbir blok bu dakikadan sonra bitemez.
+  let cursor = getStartMinutes(result[anchorIndex]);
+
+  for (let i = anchorIndex - 1; i >= 0; i--) {
+    const current = result[i];
+    const end = getEndMinutes(current);
+    const duration = getDurationMinutes(current);
+
+    if (end <= cursor) break;
+
+    const overflow = end - cursor;
+
+    if (current.category === 'BUFFER') {
+      const remaining = duration - overflow;
+
+      if (remaining >= MIN_TASK_MINUTES) {
+        // Tampon bu kez BİTİŞİNDEN kısalır; başlangıcı yerinde kalır.
+        result[i] = {
+          ...current,
+          endTime: fromDayMinutes(current.startTime, cursor),
+        };
+        log.absorbedBufferIds.push(current.id);
+        break;
+      }
+
+      log.removedIds.add(current.id);
+      log.absorbedBufferIds.push(current.id);
+      continue;
+    }
+
+    if (current.isFixed) {
+      log.conflict = `"${current.title}" sabit bir görev olduğu için kaydırılamadı; ${overflow} dakikalık çakışma var.`;
+      break;
+    }
+
+    // Geriye itilen blok gün başından taşarsa orada durur ve çakışma kalır.
+    const desired = cursor - duration;
+    if (desired < DAY_START_MINUTE) {
+      result[i] = withStartMinutes(current, DAY_START_MINUTE);
+      log.shiftedTaskIds.push(current.id);
+      log.conflict = `"${current.title}" gün başına sığmadı; ${DAY_START_MINUTE - desired} dakikalık çakışma var.`;
+      break;
+    }
+
+    result[i] = withStartMinutes(current, desired);
+    log.shiftedTaskIds.push(current.id);
+    cursor = desired;
+  }
+}
+
+export function reflow(allTasks: Task[], anchorId: string): ScheduleResult {
+  const anchor = allTasks.find((t) => t.id === anchorId);
+  if (!anchor) {
+    return { tasks: allTasks, shiftedTaskIds: [], absorbedBufferIds: [], conflict: null };
+  }
+
+  // Sadece çapa görevle aynı gündeki blokları hesaba katıyoruz.
+  const sameDay = sortByStart(allTasks.filter((t) => isTaskOnDay(t, anchor.startTime)));
+  const otherDays = allTasks.filter((t) => !isTaskOnDay(t, anchor.startTime));
+
+  const log: RippleLog = {
+    shiftedTaskIds: [],
+    absorbedBufferIds: [],
+    removedIds: new Set(),
+    conflict: null,
+  };
+
+  const anchorIndex = sameDay.findIndex((t) => t.id === anchorId);
+  const result = [...sameDay];
+
+  // İki geçiş birbirinden bağımsız: biri çapanın solundaki, diğeri sağındaki
+  // bloklara dokunuyor. Silinenler sonda süzülüyor ki indeksler kaymasın.
+  rippleBackward(result, anchorIndex, log);
+  rippleForward(result, anchorIndex, log);
+
+  const cleaned = result.filter((t) => !log.removedIds.has(t.id));
   return {
     tasks: [...otherDays, ...cleaned],
-    shiftedTaskIds,
-    absorbedBufferIds,
-    conflict,
+    shiftedTaskIds: log.shiftedTaskIds,
+    absorbedBufferIds: log.absorbedBufferIds,
+    conflict: log.conflict,
   };
 }
 

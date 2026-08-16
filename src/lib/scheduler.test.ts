@@ -127,6 +127,110 @@ describe('reflow — tampon algoritması', () => {
     expect(yarinSonuc.startTime.getHours()).toBe(9);
   });
 
+  it('geriye taşımada önceki blokları geriye iter', () => {
+    // 'b' 10:00'dan 09:30'a çekildi; 'a' onun önünden çekilmeli.
+    const tasks = [gorev('a', '09:00', 60), gorev('b', '09:30', 60)];
+    const sonuc = reflow(tasks, 'b');
+
+    expect(harita(sonuc.tasks)).toEqual({ a: '08:30-09:30', b: '09:30-10:30' });
+    expect(sonuc.shiftedTaskIds).toEqual(['a']);
+  });
+
+  it('geriye taşımada önceki tampon bitişinden kısalır', () => {
+    const tasks = [
+      gorev('onceki', '08:00', 60),
+      gorev('tampon', '09:00', 60, { category: 'BUFFER' }),
+      gorev('is', '09:30', 60),
+    ];
+    const sonuc = reflow(tasks, 'is');
+
+    // Tampon 09:00-10:00 iken 09:00-09:30'a düşer; 'onceki' hiç kıpırdamaz.
+    expect(harita(sonuc.tasks)).toEqual({
+      onceki: '08:00-09:00',
+      tampon: '09:00-09:30',
+      is: '09:30-10:30',
+    });
+    expect(sonuc.absorbedBufferIds).toEqual(['tampon']);
+    expect(sonuc.shiftedTaskIds).toEqual([]);
+  });
+
+  it('geriye taşımada tükenen tampon silinir; arkasındaki blok kurtulur', () => {
+    // Tampon tamamen 'is'in içinde kaldığı için silinmesi çakışmayı bitirir.
+    // 'onceki' zaten 09:00'da bittiğinden itilmesine gerek yok — tamponun
+    // varlık sebebi tam olarak bu: darbeyi yiyip komşusunu korumak.
+    const tasks = [
+      gorev('onceki', '08:00', 60),
+      gorev('tampon', '09:00', 30, { category: 'BUFFER' }),
+      gorev('is', '09:00', 60),
+    ];
+    const sonuc = reflow(tasks, 'is');
+
+    expect(sonuc.tasks.map((t) => t.id)).not.toContain('tampon');
+    expect(harita(sonuc.tasks)).toEqual({ onceki: '08:00-09:00', is: '09:00-10:00' });
+    expect(sonuc.absorbedBufferIds).toEqual(['tampon']);
+    expect(sonuc.shiftedTaskIds).toEqual([]);
+  });
+
+  it('geriye taşımada sabit görev zinciri kırar', () => {
+    const tasks = [
+      gorev('toplanti', '09:00', 60, { isFixed: true, title: 'Ekip toplantısı' }),
+      gorev('ogle', '09:30', 45),
+    ];
+    const sonuc = reflow(tasks, 'ogle');
+
+    expect(harita(sonuc.tasks)).toEqual({ toplanti: '09:00-10:00', ogle: '09:30-10:15' });
+    expect(sonuc.conflict).toContain('Ekip toplantısı');
+    expect(sonuc.conflict).toContain('30 dakika');
+  });
+
+  it('geriye zincirleme iter', () => {
+    const tasks = [
+      gorev('b1', '08:00', 60),
+      gorev('b2', '09:00', 60),
+      gorev('is', '09:30', 60),
+    ];
+    const sonuc = reflow(tasks, 'is');
+
+    expect(harita(sonuc.tasks)).toEqual({
+      b1: '07:30-08:30',
+      b2: '08:30-09:30',
+      is: '09:30-10:30',
+    });
+    expect(sonuc.shiftedTaskIds).toEqual(['b2', 'b1']);
+  });
+
+  it('gün başına sığmayan blok orada durur ve çakışma raporlanır', () => {
+    const tasks = [gorev('erken', '00:00', 60), gorev('is', '00:30', 60)];
+    const sonuc = reflow(tasks, 'is');
+
+    expect(harita(sonuc.tasks)).toEqual({ erken: '00:00-01:00', is: '00:30-01:30' });
+    expect(sonuc.conflict).toContain('gün başına sığmadı');
+  });
+
+  it('iki yönde birden iter: araya bırakılan blok her iki tarafı açar', () => {
+    const tasks = [
+      gorev('onceki', '09:00', 60),
+      gorev('is', '09:30', 60),
+      gorev('sonraki', '10:00', 60),
+    ];
+    const sonuc = reflow(tasks, 'is');
+
+    expect(harita(sonuc.tasks)).toEqual({
+      onceki: '08:30-09:30',
+      is: '09:30-10:30',
+      sonraki: '10:30-11:30',
+    });
+    expect(sonuc.shiftedTaskIds.sort()).toEqual(['onceki', 'sonraki']);
+  });
+
+  it('geride boşluk varsa geriye dokunmaz', () => {
+    const tasks = [gorev('uzak', '07:00', 60), gorev('is', '09:30', 60)];
+    const sonuc = reflow(tasks, 'is');
+
+    expect(harita(sonuc.tasks)).toEqual({ uzak: '07:00-08:00', is: '09:30-10:30' });
+    expect(sonuc.shiftedTaskIds).toEqual([]);
+  });
+
   it('bilinmeyen çapa id gelirse listeyi olduğu gibi döndürür', () => {
     const tasks = [gorev('a', '09:00', 60)];
     const sonuc = reflow(tasks, 'olmayan');
