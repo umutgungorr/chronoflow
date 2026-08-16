@@ -26,7 +26,16 @@ const arc = (minutes: number) => (minutes / DAY_END_MINUTE) * CIRCUMFERENCE;
  * küçültülmüş haritası oluyor — boşluklar gerçekten boş saatler.
  * Zaman tünelindeki "şimdi" çizgisinin karşılığı da kadranda ibre olarak var.
  */
-export function DailyStats() {
+type Props = {
+  /**
+   * Panelden bir bloğa gidildiğinde çağrılır. Telefonda kadran alttan açılan
+   * bir panelde durduğu için, düzenleme penceresi açılırken o panelin
+   * kapanması gerekiyor — yoksa modal panelin arkasında kalır.
+   */
+  onNavigate?: () => void;
+};
+
+export function DailyStats({ onNavigate }: Props = {}) {
   const tasks = useTasksForSelectedDay();
   const day = useTaskStore((s) => s.selectedDate);
   const openEditEditor = useTaskStore((s) => s.openEditEditor);
@@ -164,7 +173,10 @@ export function DailyStats() {
             Sıradaki
           </h3>
           <NextUp
-            onOpen={openEditEditor}
+            onOpen={(id) => {
+              openEditEditor(id);
+              onNavigate?.();
+            }}
             nowMinute={showNeedle ? nowMinute : 0}
             tasks={tasks}
           />
