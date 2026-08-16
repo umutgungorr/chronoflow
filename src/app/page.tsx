@@ -10,6 +10,7 @@ import { DailyStats } from '@/components/stats/DailyStats';
 import { TaskModal } from '@/components/tasks/TaskModal';
 import { TimelineGrid } from '@/components/timeline/TimelineGrid';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
+import { useUndoShortcut } from '@/hooks/use-undo-shortcut';
 
 export default function Home() {
   return (
@@ -21,6 +22,7 @@ export default function Home() {
 
 function Planner() {
   const hydrated = useHydratedStore();
+  useUndoShortcut();
 
   return (
     <main className="mx-auto flex h-dvh w-full max-w-6xl flex-col px-4 pb-4 pt-5 sm:px-6 sm:pb-6">

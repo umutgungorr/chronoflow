@@ -62,6 +62,18 @@ type TaskState = {
   editor: EditorState;
   /** Son reflow işleminin özeti (toast göstermek için). */
   feedback: FlowFeedback;
+  /**
+   * Geri alma yığını. Her KULLANICI değişikliğinden önce görev listesinin
+   * o anki hali buraya bırakılır. Sunucudan gelen birleştirmeler (senkron)
+   * bilerek dışarıda: uzaktaki bir değişikliği "geri almak" anlamsız.
+   */
+  history: HistoryEntry[];
+};
+
+/** Geçmişteki bir kare: o andaki liste + ne yapıldığının adı. */
+export type HistoryEntry = {
+  tasks: Task[];
+  label: string;
 };
 
 type TaskActions = {
@@ -97,6 +109,9 @@ type TaskActions = {
   closeEditor: () => void;
   clearFeedback: () => void;
 
+  /* — Geri alma — */
+  undo: () => void;
+
   /* — Yardımcılar — */
   resetToMock: () => void;
   clearDay: () => void;
@@ -115,6 +130,23 @@ function createId(): string {
     return crypto.randomUUID();
   }
   return `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Geçmişte tutulacak en fazla kare sayısı. */
+const HISTORY_LIMIT = 30;
+
+/**
+ * Değişiklikten ÖNCEKİ listeyi geçmişe bırakır.
+ *
+ * Her mutasyon aksiyonunun döndürdüğü nesneye yayılır:
+ *   set((s) => ({ ...snapshot(s, 'blok silindi'), tasks: yeniListe }))
+ *
+ * Otomatik (subscribe ile fark alarak) yapmadım: o yöntem senkronun
+ * sunucudan yazdığı değişiklikleri de geçmişe atardı ve "geri al"
+ * uzaktaki bir düzenlemeyi geri alırdı.
+ */
+function snapshot(state: TaskStore, label: string): Pick<TaskStore, 'history'> {
+  return { history: [...state.history, { tasks: state.tasks, label }].slice(-HISTORY_LIMIT) };
 }
 
 /** reflow sonucunu okunabilir bir kullanıcı mesajına çevirir. */
@@ -144,6 +176,7 @@ export const useTaskStore = create<TaskStore>()(
       selectedTaskId: null,
       editor: null,
       feedback: null,
+      history: [],
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
@@ -164,7 +197,10 @@ export const useTaskStore = create<TaskStore>()(
           isCompleted: input.isCompleted ?? false,
           isFixed: input.isFixed ?? false,
         };
-        set((s) => ({ tasks: sortByStart([...s.tasks, task]) }));
+        set((s) => ({
+          ...snapshot(s, 'blok eklendi'),
+          tasks: sortByStart([...s.tasks, task]),
+        }));
         return id;
       },
 
@@ -176,16 +212,21 @@ export const useTaskStore = create<TaskStore>()(
         // düzenleme penceresi) tampon zinciri aynı şekilde işler.
         const timeChanged = patch.startTime !== undefined || patch.endTime !== undefined;
         if (!timeChanged) {
-          set({ tasks: sortByStart(next) });
+          set({ ...snapshot(state, 'blok düzenlendi'), tasks: sortByStart(next) });
           return;
         }
 
         const result = reflow(next, id);
-        set({ tasks: sortByStart(result.tasks), feedback: toFeedback(result) });
+        set({
+          ...snapshot(state, 'blok düzenlendi'),
+          tasks: sortByStart(result.tasks),
+          feedback: toFeedback(result),
+        });
       },
 
       deleteTask: (id) =>
         set((s) => ({
+          ...snapshot(s, 'blok silindi'),
           tasks: s.tasks.filter((t) => t.id !== id),
           selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
           // Silinen görev düzenleniyorsa pencere de kapanmalı.
@@ -194,6 +235,7 @@ export const useTaskStore = create<TaskStore>()(
 
       toggleComplete: (id) =>
         set((s) => ({
+          ...snapshot(s, 'tamamlandı işareti'),
           tasks: s.tasks.map((t) =>
             t.id === id ? { ...t, isCompleted: !t.isCompleted } : t,
           ),
@@ -201,6 +243,7 @@ export const useTaskStore = create<TaskStore>()(
 
       toggleFixed: (id) =>
         set((s) => ({
+          ...snapshot(s, 'sabit işareti'),
           tasks: s.tasks.map((t) => (t.id === id ? { ...t, isFixed: !t.isFixed } : t)),
         })),
 
@@ -222,7 +265,11 @@ export const useTaskStore = create<TaskStore>()(
         );
         // 3) Taşıma sonrası oluşan çakışmaları tampon algoritmasıyla çöz.
         const result = reflow(moved, id);
-        set({ tasks: sortByStart(result.tasks), feedback: toFeedback(result) });
+        set({
+          ...snapshot(state, 'blok taşındı'),
+          tasks: sortByStart(result.tasks),
+          feedback: toFeedback(result),
+        });
       },
 
       resizeTask: (id, edge, minute) => {
@@ -253,7 +300,11 @@ export const useTaskStore = create<TaskStore>()(
 
         const resized = state.tasks.map((t) => (t.id === id ? next : t));
         const result = reflow(resized, id);
-        set({ tasks: sortByStart(result.tasks), feedback: toFeedback(result) });
+        set({
+          ...snapshot(state, 'blok süresi değişti'),
+          tasks: sortByStart(result.tasks),
+          feedback: toFeedback(result),
+        });
       },
 
       /* ---------------------------------------------------------------- */
@@ -297,6 +348,7 @@ export const useTaskStore = create<TaskStore>()(
         if (skipped.length > 0) messages.push(`${skipped.length} madde güne sığmadı`);
 
         set({
+          ...snapshot(state, `${placed} blok dağıtıldı`),
           tasks: sortByStart([...state.tasks, ...created]),
           feedback:
             messages.length > 0
@@ -319,15 +371,39 @@ export const useTaskStore = create<TaskStore>()(
       closeEditor: () => set({ editor: null }),
       clearFeedback: () => set({ feedback: null }),
 
+      /* ---------------------------------------------------------------- */
+      undo: () => {
+        const state = get();
+        const last = state.history[state.history.length - 1];
+        if (!last) return;
+
+        set({
+          tasks: last.tasks,
+          history: state.history.slice(0, -1),
+          feedback: { message: `Geri alındı: ${last.label}`, tone: 'info' },
+          // Geri alınan blok silinmiş olabilir; açık pencere ve seçim
+          // artık geçersiz olabileceği için temizliyoruz.
+          selectedTaskId: null,
+          editor: null,
+        });
+      },
+
+      /* ---------------------------------------------------------------- */
       resetToMock: () =>
-        set((s) => ({ tasks: createMockTasks(s.selectedDate), feedback: null })),
+        set((s) => ({
+          ...snapshot(s, 'örnek plan yüklendi'),
+          tasks: createMockTasks(s.selectedDate),
+          feedback: null,
+        })),
 
       clearDay: () =>
         set((s) => ({
+          ...snapshot(s, 'gün temizlendi'),
           tasks: s.tasks.filter((t) => !isTaskOnDay(t, s.selectedDate)),
           feedback: null,
         })),
 
+      // Senkron yolu: geçmişe kare bırakmaz (bkz. history alanının açıklaması).
       replaceTasks: (tasks) => set({ tasks: sortByStart(tasks) }),
     }),
     {
