@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
@@ -26,6 +26,31 @@ export const metadata: Metadata = {
   title: "ChronoFlow — Günlük Zaman Bloklama",
   description:
     "Sürükle-bırak destekli, akıllı tampon süreli günlük zaman planlama uygulaması.",
+  // iOS manifest'teki `display` alanını okumaz; tam ekran açılması için
+  // bu meta etiketleri gerekiyor.
+  appleWebApp: {
+    capable: true,
+    title: "ChronoFlow",
+    statusBarStyle: "black-translucent",
+  },
+  other: {
+    // Next yalnızca standart adı (`mobile-web-app-capable`) yazıyor.
+    // iOS 16.4 öncesi sürümler hâlâ bu eski adı arıyor; olmadan ana
+    // ekrandan açılınca tam ekran değil, tarayıcı içinde açılır.
+    "apple-mobile-web-app-capable": "yes",
+  },
+};
+
+export const viewport: Viewport = {
+  // Telefonun durum çubuğu uygulamanın zeminiyle aynı renge boyanır.
+  // Manifest tek renk kabul ediyor ama burada temaya göre ayırabiliyoruz.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#eef0f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#080a0e" },
+  ],
+  // Izgara zaten dokunmatikte sürükleniyor; çift dokunuşla yakınlaşma
+  // kazayla tetikleniyor ve blok taşımayı bozuyor.
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
