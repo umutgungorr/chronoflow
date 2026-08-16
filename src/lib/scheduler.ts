@@ -216,9 +216,12 @@ export function getAvailableDuration(
   startMinute: number,
   preferred: number,
 ): number {
+  // `>=`: aynı dakikada başlayan blok da duvardır. Aksi halde bir bloğun
+  // hemen üstüne tıklayıp snap ile o dakikaya yuvarlanınca üst üste blok
+  // açılırdı.
   const nextStart = sortByStart(tasks.filter((t) => isTaskOnDay(t, day)))
     .map(getStartMinutes)
-    .find((start) => start > startMinute);
+    .find((start) => start >= startMinute);
 
   const wall = Math.min(nextStart ?? DAY_END_MINUTE, DAY_END_MINUTE);
   return Math.max(MIN_TASK_MINUTES, Math.min(preferred, wall - startMinute));

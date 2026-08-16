@@ -130,7 +130,10 @@ function cleanTitle(text: string): string {
  */
 export function parseSchedulePrompt(text: string): ScheduleItem[] {
   return text
-    .split(/[,;\n]|\bve\b|\bsonra\b|\bardından\b/i)
+    // Virgül hem madde ayırıcı hem Türkçe ondalık ayracı. İki rakamın
+    // ARASINDAKİ virgülde bölmüyoruz, yoksa "1,5 saat" ikiye ayrılır ve
+    // geriye "5 saat" kalırdı — sessizce beş katı uzun bir blok.
+    .split(/(?<!\d),|,(?!\d)|[;\n]|\bve\b|\bsonra\b|\bardından\b/i)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 1)
     .map((segment) => {
