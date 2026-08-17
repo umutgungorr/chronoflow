@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useCurrentMinute } from '@/hooks/use-current-minute';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
 import { useUndoShortcut } from '@/hooks/use-undo-shortcut';
+import { useVisitLog } from '@/hooks/use-visit-log';
 import { sortGoals } from '@/lib/goals';
 import { useTaskStore } from '@/store/useTaskStore';
 
@@ -27,6 +28,7 @@ export default function HedeflerPage() {
 function Goals() {
   const hydrated = useHydratedStore();
   useUndoShortcut();
+  useVisitLog();
 
   const goals = useTaskStore((s) => s.goals);
   const deleteGoal = useTaskStore((s) => s.deleteGoal);

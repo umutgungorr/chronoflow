@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { useIsAdmin } from '@/hooks/use-is-admin';
 import { cn } from '@/lib/utils';
 
 const SEKMELER = [
@@ -10,12 +11,16 @@ const SEKMELER = [
   { href: '/hedefler', label: 'Hedefler' },
 ] as const;
 
+/** Yönetim sekmesi yalnızca yöneticiye görünür (bkz. useIsAdmin). */
+const YONETIM = { href: '/admin', label: 'Yönetim' } as const;
+
 /**
  * Marka + sekmeler. Uygulamanın mikro tipografisiyle aynı dilde:
  * mono, küçük, geniş harf aralığı. Aktif sekme tam mürekkep, diğeri soluk.
  */
 export function AppNav() {
   const pathname = usePathname();
+  const yonetici = useIsAdmin();
 
   return (
     <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.28em]">
@@ -24,7 +29,7 @@ export function AppNav() {
         /
       </span>
       <nav className="flex items-center gap-3">
-        {SEKMELER.map((sekme) => {
+        {[...SEKMELER, ...(yonetici ? [YONETIM] : [])].map((sekme) => {
           const aktif = pathname === sekme.href;
           return (
             <Link

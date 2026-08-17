@@ -60,6 +60,20 @@ export type GoalRow = {
   deleted_at: string | null;
 };
 
+/** Yönetici listesi — yetki kontrolünün tek kaynağı. */
+export type AdminRow = { user_id: string; created_at: string };
+
+/** Ziyaret kaydı. IP yalnızca sunucu tarafında doldurulabilir. */
+export type VisitRow = {
+  id: number;
+  occurred_at: string;
+  user_id: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  path: string | null;
+  referer: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -90,9 +104,36 @@ export type Database = {
         Update: Partial<GoalRow>;
         Relationships: [];
       };
+      admins: {
+        Row: AdminRow;
+        Insert: AdminRow;
+        Update: Partial<AdminRow>;
+        Relationships: [];
+      };
+      visits: {
+        Row: VisitRow;
+        Insert: Omit<VisitRow, 'id' | 'occurred_at'> & {
+          id?: number;
+          occurred_at?: string;
+        };
+        Update: Partial<VisitRow>;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
-    Functions: Record<never, never>;
+    Functions: {
+      admin_users: {
+        Args: Record<never, never>;
+        Returns: {
+          user_id: string;
+          email: string | null;
+          created_at: string;
+          last_sign_in_at: string | null;
+          task_count: number;
+          goal_count: number;
+        }[];
+      };
+    };
     Enums: Record<never, never>;
     CompositeTypes: Record<never, never>;
   };
