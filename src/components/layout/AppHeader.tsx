@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
 
+import { DayTitle } from '@/components/layout/DayTitle';
 import { DailyStats } from '@/components/stats/DailyStats';
 import { Button } from '@/components/ui/button';
 import {
@@ -66,6 +67,7 @@ export function AppHeader() {
         <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
           {formatDayLabel(day)}
         </h1>
+        <DayTitle />
         {/* Özet satırının kendisi düğme: telefonda dokununca kadranı açar.
             Geniş ekranda kadran zaten sağda durduğu için tıklanamaz olur. */}
         <button

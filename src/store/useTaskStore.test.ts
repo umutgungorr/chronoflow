@@ -11,6 +11,7 @@ function kur(tasks = [gorev('a', '09:00', 60), gorev('b', '14:00', 60)]) {
     selectedTaskId: null,
     editor: null,
     feedback: null,
+    dayTitles: {},
     history: [],
   });
 }
@@ -126,5 +127,57 @@ describe('geri alma', () => {
   it('geçmiş sınırsız büyümez', () => {
     for (let i = 0; i < 40; i++) useTaskStore.getState().toggleComplete('a');
     expect(gecmis().length).toBeLessThanOrEqual(30);
+  });
+
+  it('gün adı değişikliğini de geri alır', () => {
+    useTaskStore.getState().setDayTitle(GUN, 'Yoğun gün');
+    expect(useTaskStore.getState().dayTitles['2026-08-15']).toBe('Yoğun gün');
+
+    useTaskStore.getState().undo();
+    expect(useTaskStore.getState().dayTitles['2026-08-15']).toBeUndefined();
+  });
+});
+
+describe('gün adı', () => {
+  const adlar = () => useTaskStore.getState().dayTitles;
+
+  it('yerel güne göre anahtarlanır', () => {
+    useTaskStore.getState().setDayTitle(GUN, 'Sınav');
+    expect(adlar()).toEqual({ '2026-08-15': 'Sınav' });
+  });
+
+  it('gece yarısına yakın saatlerde gün kaymaz', () => {
+    // toISOString() kullanılsaydı UTC+3'te 23:30 bir sonraki güne yazardı.
+    useTaskStore.getState().setDayTitle(new Date(2026, 7, 15, 23, 30), 'Geç');
+    expect(Object.keys(adlar())).toEqual(['2026-08-15']);
+  });
+
+  it('baştaki ve sondaki boşlukları atar', () => {
+    useTaskStore.getState().setDayTitle(GUN, '  Yoğun gün  ');
+    expect(adlar()['2026-08-15']).toBe('Yoğun gün');
+  });
+
+  it('boş metin adı siler', () => {
+    useTaskStore.getState().setDayTitle(GUN, 'Bir şey');
+    useTaskStore.getState().setDayTitle(GUN, '   ');
+    expect(adlar()['2026-08-15']).toBeUndefined();
+  });
+
+  it('aynı ad tekrar yazılırsa geçmişi kirletmez', () => {
+    useTaskStore.getState().setDayTitle(GUN, 'Aynı');
+    const oncekiUzunluk = gecmis().length;
+    useTaskStore.getState().setDayTitle(GUN, 'Aynı');
+    expect(gecmis().length).toBe(oncekiUzunluk);
+  });
+
+  it('günler birbirini ezmez', () => {
+    useTaskStore.getState().setDayTitle(GUN, 'Cumartesi');
+    useTaskStore.getState().setDayTitle(new Date(2026, 7, 16), 'Pazar');
+    expect(adlar()).toEqual({ '2026-08-15': 'Cumartesi', '2026-08-16': 'Pazar' });
+  });
+
+  it('senkronun yazdığı adlar geçmişe girmez', () => {
+    useTaskStore.getState().replaceDayTitles({ '2026-08-20': 'Uzaktan' });
+    expect(gecmis()).toHaveLength(0);
   });
 });

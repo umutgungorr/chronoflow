@@ -39,6 +39,15 @@ export type TaskRow = {
  * Views/Functions/Enums/CompositeTypes boş da olsa BULUNMALI — eksikse
  * tip çözümlemesi `never`'a düşer ve upsert/update çağrıları derlenmez.
  */
+/** Güne verilen ad. Anahtar (user_id, day); `day` yerel 'YYYY-MM-DD'. */
+export type DayTitleRow = {
+  user_id: string;
+  day: string;
+  title: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -49,6 +58,15 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: Partial<TaskRow>;
+        Relationships: [];
+      };
+      day_titles: {
+        Row: DayTitleRow;
+        Insert: Omit<DayTitleRow, 'updated_at' | 'deleted_at'> & {
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: Partial<DayTitleRow>;
         Relationships: [];
       };
     };

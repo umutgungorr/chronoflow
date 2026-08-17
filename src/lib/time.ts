@@ -124,3 +124,13 @@ export function formatDuration(minutes: number): string {
 export function formatDayLabel(date: Date): string {
   return format(date, 'd MMMM EEEE', { locale: tr });
 }
+
+/**
+ * Günün kimliği: 'YYYY-MM-DD'.
+ *
+ * Bilerek `toISOString()` kullanmıyoruz — o UTC'ye çevirir ve gece yarısına
+ * yakın saatlerde günü bir kaydırır. Uygulamadaki gün kavramı yereldir.
+ */
+export function dayKey(date: Date): string {
+  return format(date, 'yyyy-MM-dd');
+}

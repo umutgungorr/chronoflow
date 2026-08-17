@@ -78,6 +78,51 @@ create policy tasks_delete_own on public.tasks
   for delete using (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
+-- day_titles tablosu — güne verilen ad
+-- ---------------------------------------------------------------------------
+-- `day` neden date değil de text? Uygulamadaki "gün" kavramı YEREL bir gündür;
+-- 16 Ağustos, kullanıcının saat diliminde 16 Ağustos'tur. Postgres'in `date`
+-- tipine yazarken araya UTC dönüşümü girerse gece yarısına yakın kayıtlar bir
+-- gün kayabilir. 'YYYY-MM-DD' metnini istemcinin yerel tarihinden üretip
+-- olduğu gibi saklıyoruz — dönüşüm yok, sürpriz yok.
+create table if not exists public.day_titles (
+  user_id      uuid not null references auth.users (id) on delete cascade,
+  day          text not null,
+  title        text not null,
+
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz,
+
+  primary key (user_id, day)
+);
+
+drop trigger if exists day_titles_touch_updated_at on public.day_titles;
+create trigger day_titles_touch_updated_at
+  before update on public.day_titles
+  for each row execute function public.touch_updated_at();
+
+alter table public.day_titles enable row level security;
+
+drop policy if exists day_titles_select_own on public.day_titles;
+create policy day_titles_select_own on public.day_titles
+  for select using (auth.uid() = user_id);
+
+drop policy if exists day_titles_insert_own on public.day_titles;
+create policy day_titles_insert_own on public.day_titles
+  for insert with check (auth.uid() = user_id);
+
+drop policy if exists day_titles_update_own on public.day_titles;
+create policy day_titles_update_own on public.day_titles
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists day_titles_delete_own on public.day_titles;
+create policy day_titles_delete_own on public.day_titles
+  for delete using (auth.uid() = user_id);
+
+revoke all on public.day_titles from anon;
+grant select, insert, update, delete on public.day_titles to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Rol izinleri (RLS'in bir alt katmanı)
 -- ---------------------------------------------------------------------------
 -- RLS satır bazında korur; bu satırlar tablo bazında korur. Giriş yapmamış

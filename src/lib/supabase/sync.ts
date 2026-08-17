@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 
-import { supabase, type TaskRow } from '@/lib/supabase/client';
+import { supabase, type DayTitleRow, type TaskRow } from '@/lib/supabase/client';
 import { rowToTask, taskToRow } from '@/lib/supabase/mappers';
 import { useTaskStore } from '@/store/useTaskStore';
 import type { Task } from '@/types';
@@ -58,6 +58,10 @@ let outbox = new Map<string, PendingOp>();
 /** id → içerik imzası. Neyin gerçekten değiştiğini buradan anlıyoruz. */
 let known = new Map<string, string>();
 
+/** Gün adları için ikinci kuyruk; anahtar 'YYYY-MM-DD'. */
+let titleOutbox = new Map<string, PendingOp>();
+let knownTitles = new Map<string, string>();
+
 let userId: string | null = null;
 let unsubscribeTasks: (() => void) | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -81,20 +85,31 @@ function signature(task: Task): string {
 function loadOutbox() {
   try {
     const raw = localStorage.getItem(OUTBOX_KEY);
-    const parsed: PendingOp[] = raw ? JSON.parse(raw) : [];
-    outbox = new Map(parsed.map((op) => [op.id, op]));
+    const parsed = raw ? JSON.parse(raw) : {};
+    // Eski sürüm düz dizi yazıyordu; ikinci kuyruk gelince nesneye geçtik.
+    const gorevler: PendingOp[] = Array.isArray(parsed) ? parsed : (parsed.tasks ?? []);
+    const adlar: PendingOp[] = Array.isArray(parsed) ? [] : (parsed.dayTitles ?? []);
+    outbox = new Map(gorevler.map((op) => [op.id, op]));
+    titleOutbox = new Map(adlar.map((op) => [op.id, op]));
   } catch {
     outbox = new Map();
+    titleOutbox = new Map();
   }
 }
 
 function saveOutbox() {
   try {
-    localStorage.setItem(OUTBOX_KEY, JSON.stringify([...outbox.values()]));
+    localStorage.setItem(
+      OUTBOX_KEY,
+      JSON.stringify({
+        tasks: [...outbox.values()],
+        dayTitles: [...titleOutbox.values()],
+      }),
+    );
   } catch {
     // Kota dolduysa yapacak bir şey yok; kuyruk bellekte yaşamaya devam eder.
   }
-  setSync({ pending: outbox.size });
+  setSync({ pending: outbox.size + titleOutbox.size });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -105,23 +120,36 @@ function snapshot(tasks: Task[]): Map<string, string> {
   return new Map(tasks.map((task) => [task.id, signature(task)]));
 }
 
-function onTasksChanged(tasks: Task[]) {
+/** İki varlık için de aynı fark alma mantığı: eklenen/değişen ↔ silinen. */
+function diffInto(
+  current: Map<string, string>,
+  previous: Map<string, string>,
+  target: Map<string, PendingOp>,
+) {
+  for (const [id, sig] of current) {
+    if (previous.get(id) !== sig) target.set(id, { id, type: 'upsert' });
+  }
+  for (const id of previous.keys()) {
+    if (!current.has(id)) target.set(id, { id, type: 'delete' });
+  }
+}
+
+function onStoreChanged(tasks: Task[], dayTitles: Record<string, string>) {
   const current = snapshot(tasks);
+  const currentTitles = new Map(Object.entries(dayTitles));
 
   if (applyingRemote) {
     // Sunucudan gelen veri: bilinen hali güncelle, kuyruğa hiçbir şey ekleme.
     known = current;
+    knownTitles = currentTitles;
     return;
   }
 
-  for (const [id, sig] of current) {
-    if (known.get(id) !== sig) outbox.set(id, { id, type: 'upsert' });
-  }
-  for (const id of known.keys()) {
-    if (!current.has(id)) outbox.set(id, { id, type: 'delete' });
-  }
+  diffInto(current, known, outbox);
+  diffInto(currentTitles, knownTitles, titleOutbox);
 
   known = current;
+  knownTitles = currentTitles;
   saveOutbox();
   scheduleFlush();
 }
@@ -143,7 +171,7 @@ async function flush(): Promise<void> {
   if (!supabase || !userId || flushing) return;
 
   // Gönderilecek bir şey yoksa gösterge "eşitleniyor"da asılı kalmasın.
-  if (outbox.size === 0) {
+  if (outbox.size === 0 && titleOutbox.size === 0) {
     setSync({ status: 'idle' });
     return;
   }
@@ -170,6 +198,14 @@ async function flush(): Promise<void> {
 
   const deletedIds = batch.filter((op) => op.type === 'delete').map((op) => op.id);
 
+  // Gün adları ikinci kuyruktan.
+  const titleBatch = [...titleOutbox.values()];
+  const titles = useTaskStore.getState().dayTitles;
+  const titleRows = titleBatch
+    .filter((op) => op.type === 'upsert' && titles[op.id] !== undefined)
+    .map((op) => ({ user_id: userId!, day: op.id, title: titles[op.id], deleted_at: null }));
+  const deletedDays = titleBatch.filter((op) => op.type === 'delete').map((op) => op.id);
+
   try {
     if (rows.length > 0) {
       const { error } = await supabase.from('tasks').upsert(rows);
@@ -186,9 +222,29 @@ async function flush(): Promise<void> {
       if (error) throw error;
     }
 
+    if (titleRows.length > 0) {
+      // Anahtar bileşik olduğu için onConflict'i açıkça söylemek gerekiyor.
+      const { error } = await supabase
+        .from('day_titles')
+        .upsert(titleRows, { onConflict: 'user_id,day' });
+      if (error) throw error;
+    }
+
+    if (deletedDays.length > 0) {
+      const { error } = await supabase
+        .from('day_titles')
+        .update({ deleted_at: new Date().toISOString() })
+        .in('day', deletedDays)
+        .eq('user_id', userId);
+      if (error) throw error;
+    }
+
     for (const op of batch) {
       // Bu sırada aynı görev tekrar değiştiyse kuyrukta kalmalı.
       if (outbox.get(op.id)?.type === op.type) outbox.delete(op.id);
+    }
+    for (const op of titleBatch) {
+      if (titleOutbox.get(op.id)?.type === op.type) titleOutbox.delete(op.id);
     }
     saveOutbox();
     setSync({ status: 'idle', lastSyncedAt: new Date(), errorMessage: null });
@@ -220,13 +276,29 @@ async function fetchRows(): Promise<TaskRow[] | null> {
   return data ?? [];
 }
 
+async function fetchTitleRows(): Promise<DayTitleRow[] | null> {
+  if (!supabase || !userId) return null;
+  const { data, error } = await supabase
+    .from('day_titles')
+    .select('*')
+    .eq('user_id', userId);
+  if (error) {
+    setSync({ status: 'error', errorMessage: error.message });
+    return null;
+  }
+  return data ?? [];
+}
+
 async function pull(): Promise<void> {
   const rows = await fetchRows();
   if (rows === null) return;
+  const titleRows = await fetchTitleRows();
 
   applyRemote(rows);
+  if (titleRows) applyRemoteTitles(titleRows);
+
   setSync({
-    status: outbox.size > 0 ? 'syncing' : 'idle',
+    status: outbox.size + titleOutbox.size > 0 ? 'syncing' : 'idle',
     lastSyncedAt: new Date(),
     errorMessage: null,
   });
@@ -251,6 +323,18 @@ async function initialSync(): Promise<void> {
     // Ağ yok: kuyruk duruyor, bağlantı gelince tekrar denenecek.
     scheduleFlush(3000);
     return;
+  }
+
+  const titleRows = await fetchTitleRows();
+  if (titleRows) {
+    applyRemoteTitles(titleRows);
+    // Sunucuda olmayan yerel adlar gönderilecek. Örnek plan sorunu burada
+    // yok: mock veri gün adı üretmiyor, bu yüzden görevlerdeki gibi ayıklama
+    // yapmaya gerek kalmıyor.
+    const sunucudakiler = new Set(titleRows.map((r) => r.day));
+    for (const gun of Object.keys(useTaskStore.getState().dayTitles)) {
+      if (!sunucudakiler.has(gun)) titleOutbox.set(gun, { id: gun, type: 'upsert' });
+    }
   }
 
   applyRemote(rows);
@@ -278,7 +362,7 @@ async function initialSync(): Promise<void> {
   saveOutbox();
   await flush();
   setSync({
-    status: outbox.size > 0 ? 'syncing' : 'idle',
+    status: outbox.size + titleOutbox.size > 0 ? 'syncing' : 'idle',
     lastSyncedAt: new Date(),
   });
 }
@@ -302,6 +386,21 @@ function applyRemote(rows: TaskRow[]) {
 
   applyingRemote = true;
   useTaskStore.getState().replaceTasks([...merged.values()]);
+  applyingRemote = false;
+}
+
+/** Gün adları için aynı birleştirme kuralı. */
+function applyRemoteTitles(rows: DayTitleRow[]) {
+  const merged = { ...useTaskStore.getState().dayTitles };
+
+  for (const row of rows) {
+    if (titleOutbox.has(row.day)) continue; // bekleyen yerel niyet önce
+    if (row.deleted_at) delete merged[row.day];
+    else merged[row.day] = row.title;
+  }
+
+  applyingRemote = true;
+  useTaskStore.getState().replaceDayTitles(merged);
   applyingRemote = false;
 }
 
@@ -330,9 +429,12 @@ export function startSync(id: string) {
   userId = id;
   loadOutbox();
   known = snapshot(useTaskStore.getState().tasks);
+  knownTitles = new Map(Object.entries(useTaskStore.getState().dayTitles));
 
   unsubscribeTasks = useTaskStore.subscribe((state, previous) => {
-    if (state.tasks !== previous.tasks) onTasksChanged(state.tasks);
+    if (state.tasks !== previous.tasks || state.dayTitles !== previous.dayTitles) {
+      onStoreChanged(state.tasks, state.dayTitles);
+    }
   });
 
   window.addEventListener('online', handleOnline);

@@ -22,6 +22,7 @@ import {
 } from '@/lib/scheduler';
 import {
   clampStart,
+  dayKey,
   fromDayMinutes,
   getDurationMinutes,
   getStartMinutes,
@@ -63,16 +64,22 @@ type TaskState = {
   /** Son reflow işleminin özeti (toast göstermek için). */
   feedback: FlowFeedback;
   /**
-   * Geri alma yığını. Her KULLANICI değişikliğinden önce görev listesinin
-   * o anki hali buraya bırakılır. Sunucudan gelen birleştirmeler (senkron)
-   * bilerek dışarıda: uzaktaki bir değişikliği "geri almak" anlamsız.
+   * Güne verilen ad. Anahtar `dayKey()` çıktısı ('YYYY-MM-DD'), yerel gün.
+   * Adı olmayan günler burada hiç bulunmaz.
+   */
+  dayTitles: Record<string, string>;
+  /**
+   * Geri alma yığını. Her KULLANICI değişikliğinden önce planın o anki hali
+   * buraya bırakılır. Sunucudan gelen birleştirmeler (senkron) bilerek
+   * dışarıda: uzaktaki bir değişikliği "geri almak" anlamsız.
    */
   history: HistoryEntry[];
 };
 
-/** Geçmişteki bir kare: o andaki liste + ne yapıldığının adı. */
+/** Geçmişteki bir kare: o andaki plan + ne yapıldığının adı. */
 export type HistoryEntry = {
   tasks: Task[];
+  dayTitles: Record<string, string>;
   label: string;
 };
 
@@ -109,6 +116,10 @@ type TaskActions = {
   closeEditor: () => void;
   clearFeedback: () => void;
 
+  /* — Gün adı — */
+  /** Boş metin adı siler. */
+  setDayTitle: (day: Date, title: string) => void;
+
   /* — Geri alma — */
   undo: () => void;
 
@@ -117,6 +128,8 @@ type TaskActions = {
   clearDay: () => void;
   /** Senkron motoru sunucudan gelen birleşmiş listeyi buradan yazar. */
   replaceTasks: (tasks: Task[]) => void;
+  /** Senkron motoru sunucudan gelen gün adlarını buradan yazar. */
+  replaceDayTitles: (titles: Record<string, string>) => void;
 };
 
 export type TaskStore = TaskState & TaskActions;
@@ -146,7 +159,8 @@ const HISTORY_LIMIT = 30;
  * uzaktaki bir düzenlemeyi geri alırdı.
  */
 function snapshot(state: TaskStore, label: string): Pick<TaskStore, 'history'> {
-  return { history: [...state.history, { tasks: state.tasks, label }].slice(-HISTORY_LIMIT) };
+  const kare = { tasks: state.tasks, dayTitles: state.dayTitles, label };
+  return { history: [...state.history, kare].slice(-HISTORY_LIMIT) };
 }
 
 /** reflow sonucunu okunabilir bir kullanıcı mesajına çevirir. */
@@ -176,6 +190,7 @@ export const useTaskStore = create<TaskStore>()(
       selectedTaskId: null,
       editor: null,
       feedback: null,
+      dayTitles: {},
       history: [],
 
       /* ---------------------------------------------------------------- */
@@ -372,6 +387,26 @@ export const useTaskStore = create<TaskStore>()(
       clearFeedback: () => set({ feedback: null }),
 
       /* ---------------------------------------------------------------- */
+      setDayTitle: (day, title) => {
+        const anahtar = dayKey(day);
+        const temiz = title.trim();
+
+        set((s) => {
+          const mevcut = s.dayTitles[anahtar] ?? '';
+          if (mevcut === temiz) return {}; // değişiklik yok, geçmişi kirletme
+
+          const sonraki = { ...s.dayTitles };
+          if (temiz) sonraki[anahtar] = temiz;
+          else delete sonraki[anahtar];
+
+          return {
+            ...snapshot(s, temiz ? 'gün adı değişti' : 'gün adı silindi'),
+            dayTitles: sonraki,
+          };
+        });
+      },
+
+      /* ---------------------------------------------------------------- */
       undo: () => {
         const state = get();
         const last = state.history[state.history.length - 1];
@@ -379,6 +414,7 @@ export const useTaskStore = create<TaskStore>()(
 
         set({
           tasks: last.tasks,
+          dayTitles: last.dayTitles,
           history: state.history.slice(0, -1),
           feedback: { message: `Geri alındı: ${last.label}`, tone: 'info' },
           // Geri alınan blok silinmiş olabilir; açık pencere ve seçim
@@ -405,6 +441,7 @@ export const useTaskStore = create<TaskStore>()(
 
       // Senkron yolu: geçmişe kare bırakmaz (bkz. history alanının açıklaması).
       replaceTasks: (tasks) => set({ tasks: sortByStart(tasks) }),
+      replaceDayTitles: (titles) => set({ dayTitles: titles }),
     }),
     {
       name: STORAGE_KEY,
@@ -420,7 +457,11 @@ export const useTaskStore = create<TaskStore>()(
           return value;
         },
       }),
-      partialize: (state) => ({ tasks: state.tasks, selectedDate: state.selectedDate }),
+      partialize: (state) => ({
+        tasks: state.tasks,
+        selectedDate: state.selectedDate,
+        dayTitles: state.dayTitles,
+      }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).
       skipHydration: true,
