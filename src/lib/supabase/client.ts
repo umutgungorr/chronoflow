@@ -48,6 +48,18 @@ export type DayTitleRow = {
   deleted_at: string | null;
 };
 
+/** Hedef satırı. Anahtar (user_id, id) — kullanıcılar arası çakışma imkânsız. */
+export type GoalRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  note: string | null;
+  start_date: string;
+  target_date: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -67,6 +79,15 @@ export type Database = {
           deleted_at?: string | null;
         };
         Update: Partial<DayTitleRow>;
+        Relationships: [];
+      };
+      goals: {
+        Row: GoalRow;
+        Insert: Omit<GoalRow, 'updated_at' | 'deleted_at'> & {
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: Partial<GoalRow>;
         Relationships: [];
       };
     };

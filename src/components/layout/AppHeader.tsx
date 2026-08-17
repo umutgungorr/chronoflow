@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
 
+import { AppNav } from '@/components/layout/AppNav';
 import { DayTitle } from '@/components/layout/DayTitle';
 import { DailyStats } from '@/components/stats/DailyStats';
 import { Button } from '@/components/ui/button';
@@ -61,9 +62,7 @@ export function AppHeader() {
   return (
     <header className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-1.5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">
-          ChronoFlow
-        </p>
+        <AppNav />
         <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
           {formatDayLabel(day)}
         </h1>

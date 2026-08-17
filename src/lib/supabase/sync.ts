@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 
-import { supabase, type DayTitleRow, type TaskRow } from '@/lib/supabase/client';
+import type { Goal } from '@/lib/goals';
+import { supabase, type DayTitleRow, type GoalRow, type TaskRow } from '@/lib/supabase/client';
 import { rowToTask, taskToRow } from '@/lib/supabase/mappers';
 import { useTaskStore } from '@/store/useTaskStore';
 import type { Task } from '@/types';
@@ -62,6 +63,10 @@ let known = new Map<string, string>();
 let titleOutbox = new Map<string, PendingOp>();
 let knownTitles = new Map<string, string>();
 
+/** Hedefler için üçüncü kuyruk; anahtar hedef kimliği. */
+let goalOutbox = new Map<string, PendingOp>();
+let knownGoals = new Map<string, string>();
+
 let userId: string | null = null;
 let unsubscribeTasks: (() => void) | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -106,11 +111,14 @@ function loadOutbox() {
     // Eski sürüm düz dizi yazıyordu; ikinci kuyruk gelince nesneye geçtik.
     const gorevler: PendingOp[] = Array.isArray(parsed) ? parsed : (parsed.tasks ?? []);
     const adlar: PendingOp[] = Array.isArray(parsed) ? [] : (parsed.dayTitles ?? []);
+    const hedefler: PendingOp[] = Array.isArray(parsed) ? [] : (parsed.goals ?? []);
     outbox = new Map(gorevler.map((op) => [op.id, op]));
     titleOutbox = new Map(adlar.map((op) => [op.id, op]));
+    goalOutbox = new Map(hedefler.map((op) => [op.id, op]));
   } catch {
     outbox = new Map();
     titleOutbox = new Map();
+    goalOutbox = new Map();
   }
 }
 
@@ -121,12 +129,13 @@ function saveOutbox() {
       JSON.stringify({
         tasks: [...outbox.values()],
         dayTitles: [...titleOutbox.values()],
+        goals: [...goalOutbox.values()],
       }),
     );
   } catch {
     // Kota dolduysa yapacak bir şey yok; kuyruk bellekte yaşamaya devam eder.
   }
-  setSync({ pending: outbox.size + titleOutbox.size });
+  setSync({ pending: outbox.size + titleOutbox.size + goalOutbox.size });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -151,22 +160,34 @@ function diffInto(
   }
 }
 
-function onStoreChanged(tasks: Task[], dayTitles: Record<string, string>) {
+function goalSignature(goal: Goal): string {
+  return [goal.title, goal.note ?? '', goal.startDate, goal.targetDate].join('|');
+}
+
+function onStoreChanged(
+  tasks: Task[],
+  dayTitles: Record<string, string>,
+  goals: Goal[],
+) {
   const current = snapshot(tasks);
   const currentTitles = new Map(Object.entries(dayTitles));
+  const currentGoals = new Map(goals.map((g) => [g.id, goalSignature(g)]));
 
   if (applyingRemote) {
     // Sunucudan gelen veri: bilinen hali güncelle, kuyruğa hiçbir şey ekleme.
     known = current;
     knownTitles = currentTitles;
+    knownGoals = currentGoals;
     return;
   }
 
   diffInto(current, known, outbox);
   diffInto(currentTitles, knownTitles, titleOutbox);
+  diffInto(currentGoals, knownGoals, goalOutbox);
 
   known = current;
   knownTitles = currentTitles;
+  knownGoals = currentGoals;
   saveOutbox();
   scheduleFlush();
 }
@@ -188,7 +209,7 @@ async function flush(): Promise<void> {
   if (!supabase || !userId || flushing) return;
 
   // Gönderilecek bir şey yoksa gösterge "eşitleniyor"da asılı kalmasın.
-  if (outbox.size === 0 && titleOutbox.size === 0) {
+  if (outbox.size === 0 && titleOutbox.size === 0 && goalOutbox.size === 0) {
     setSync({ status: 'idle' });
     return;
   }
@@ -223,6 +244,24 @@ async function flush(): Promise<void> {
     .map((op) => ({ user_id: userId!, day: op.id, title: titles[op.id], deleted_at: null }));
   const deletedDays = titleBatch.filter((op) => op.type === 'delete').map((op) => op.id);
 
+  // Hedefler üçüncü kuyruktan.
+  const goalBatch = [...goalOutbox.values()];
+  const goalsById = new Map(useTaskStore.getState().goals.map((g) => [g.id, g]));
+  const goalRows = goalBatch
+    .filter((op) => op.type === 'upsert')
+    .map((op) => goalsById.get(op.id))
+    .filter((g): g is Goal => g !== undefined)
+    .map((g) => ({
+      id: g.id,
+      user_id: userId!,
+      title: g.title,
+      note: g.note ?? null,
+      start_date: g.startDate,
+      target_date: g.targetDate,
+      deleted_at: null,
+    }));
+  const deletedGoals = goalBatch.filter((op) => op.type === 'delete').map((op) => op.id);
+
   try {
     if (rows.length > 0) {
       const { error } = await supabase.from('tasks').upsert(rows);
@@ -256,9 +295,28 @@ async function flush(): Promise<void> {
       if (error) throw error;
     }
 
+    if (goalRows.length > 0) {
+      const { error } = await supabase
+        .from('goals')
+        .upsert(goalRows, { onConflict: 'user_id,id' });
+      if (error) throw error;
+    }
+
+    if (deletedGoals.length > 0) {
+      const { error } = await supabase
+        .from('goals')
+        .update({ deleted_at: new Date().toISOString() })
+        .in('id', deletedGoals)
+        .eq('user_id', userId);
+      if (error) throw error;
+    }
+
     for (const op of batch) {
       // Bu sırada aynı görev tekrar değiştiyse kuyrukta kalmalı.
       if (outbox.get(op.id)?.type === op.type) outbox.delete(op.id);
+    }
+    for (const op of goalBatch) {
+      if (goalOutbox.get(op.id)?.type === op.type) goalOutbox.delete(op.id);
     }
     for (const op of titleBatch) {
       if (titleOutbox.get(op.id)?.type === op.type) titleOutbox.delete(op.id);
@@ -306,16 +364,51 @@ async function fetchTitleRows(): Promise<DayTitleRow[] | null> {
   return data ?? [];
 }
 
+async function fetchGoalRows(): Promise<GoalRow[] | null> {
+  if (!supabase || !userId) return null;
+  const { data, error } = await supabase.from('goals').select('*').eq('user_id', userId);
+  if (error) {
+    setSync({ status: 'error', errorMessage: error.message });
+    return null;
+  }
+  return data ?? [];
+}
+
+/** Hedefler için aynı birleştirme kuralı. */
+function applyRemoteGoals(rows: GoalRow[]) {
+  const merged = new Map(useTaskStore.getState().goals.map((g) => [g.id, g]));
+
+  for (const row of rows) {
+    if (goalOutbox.has(row.id)) continue; // bekleyen yerel niyet önce
+    if (row.deleted_at) merged.delete(row.id);
+    else {
+      merged.set(row.id, {
+        id: row.id,
+        title: row.title,
+        note: row.note ?? undefined,
+        startDate: row.start_date,
+        targetDate: row.target_date,
+      });
+    }
+  }
+
+  applyingRemote = true;
+  useTaskStore.getState().replaceGoals([...merged.values()]);
+  applyingRemote = false;
+}
+
 async function pull(): Promise<void> {
   const rows = await fetchRows();
   if (rows === null) return;
   const titleRows = await fetchTitleRows();
+  const goalRows = await fetchGoalRows();
 
   applyRemote(rows);
   if (titleRows) applyRemoteTitles(titleRows);
+  if (goalRows) applyRemoteGoals(goalRows);
 
   setSync({
-    status: outbox.size + titleOutbox.size > 0 ? 'syncing' : 'idle',
+    status: outbox.size + titleOutbox.size + goalOutbox.size > 0 ? 'syncing' : 'idle',
     lastSyncedAt: new Date(),
     errorMessage: null,
   });
@@ -340,6 +433,17 @@ async function initialSync(): Promise<void> {
     // Ağ yok: kuyruk duruyor, bağlantı gelince tekrar denenecek.
     scheduleFlush(3000);
     return;
+  }
+
+  const remoteGoals = await fetchGoalRows();
+  if (remoteGoals) {
+    applyRemoteGoals(remoteGoals);
+    const sunucudakiHedefler = new Set(remoteGoals.map((r) => r.id));
+    for (const goal of useTaskStore.getState().goals) {
+      if (!sunucudakiHedefler.has(goal.id)) {
+        goalOutbox.set(goal.id, { id: goal.id, type: 'upsert' });
+      }
+    }
   }
 
   const titleRows = await fetchTitleRows();
@@ -388,7 +492,7 @@ async function initialSync(): Promise<void> {
   saveOutbox();
   await flush();
   setSync({
-    status: outbox.size + titleOutbox.size > 0 ? 'syncing' : 'idle',
+    status: outbox.size + titleOutbox.size + goalOutbox.size > 0 ? 'syncing' : 'idle',
     lastSyncedAt: new Date(),
   });
 }
@@ -456,10 +560,17 @@ export function startSync(id: string) {
   loadOutbox();
   known = snapshot(useTaskStore.getState().tasks);
   knownTitles = new Map(Object.entries(useTaskStore.getState().dayTitles));
+  knownGoals = new Map(
+    useTaskStore.getState().goals.map((g) => [g.id, goalSignature(g)]),
+  );
 
   unsubscribeTasks = useTaskStore.subscribe((state, previous) => {
-    if (state.tasks !== previous.tasks || state.dayTitles !== previous.dayTitles) {
-      onStoreChanged(state.tasks, state.dayTitles);
+    if (
+      state.tasks !== previous.tasks ||
+      state.dayTitles !== previous.dayTitles ||
+      state.goals !== previous.goals
+    ) {
+      onStoreChanged(state.tasks, state.dayTitles, state.goals);
     }
   });
 
@@ -488,6 +599,8 @@ export function stopSync() {
 
   userId = null;
   known = new Map();
+  knownTitles = new Map();
+  knownGoals = new Map();
   setSync({ status: 'off', pending: 0, errorMessage: null });
 }
 

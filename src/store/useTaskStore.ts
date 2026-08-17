@@ -30,6 +30,7 @@ import {
   snapMinutes,
   toDayMinutes,
 } from '@/lib/time';
+import type { Goal } from '@/lib/goals';
 import type { ScheduleResult, Task, TaskInput } from '@/types';
 
 /* -------------------------------------------------------------------------- */
@@ -68,6 +69,8 @@ type TaskState = {
    * Adı olmayan günler burada hiç bulunmaz.
    */
   dayTitles: Record<string, string>;
+  /** Hedefler — ayrı sayfadaki geri sayımlar. */
+  goals: Goal[];
   /**
    * Geri alma yığını. Her KULLANICI değişikliğinden önce planın o anki hali
    * buraya bırakılır. Sunucudan gelen birleştirmeler (senkron) bilerek
@@ -80,6 +83,7 @@ type TaskState = {
 export type HistoryEntry = {
   tasks: Task[];
   dayTitles: Record<string, string>;
+  goals: Goal[];
   label: string;
 };
 
@@ -120,6 +124,11 @@ type TaskActions = {
   /** Boş metin adı siler. */
   setDayTitle: (day: Date, title: string) => void;
 
+  /* — Hedefler — */
+  addGoal: (input: Omit<Goal, 'id'>) => string;
+  updateGoal: (id: string, patch: Partial<Omit<Goal, 'id'>>) => void;
+  deleteGoal: (id: string) => void;
+
   /* — Geri alma — */
   undo: () => void;
 
@@ -130,6 +139,8 @@ type TaskActions = {
   replaceTasks: (tasks: Task[]) => void;
   /** Senkron motoru sunucudan gelen gün adlarını buradan yazar. */
   replaceDayTitles: (titles: Record<string, string>) => void;
+  /** Senkron motoru sunucudan gelen hedefleri buradan yazar. */
+  replaceGoals: (goals: Goal[]) => void;
 };
 
 export type TaskStore = TaskState & TaskActions;
@@ -159,7 +170,12 @@ const HISTORY_LIMIT = 30;
  * uzaktaki bir düzenlemeyi geri alırdı.
  */
 function snapshot(state: TaskStore, label: string): Pick<TaskStore, 'history'> {
-  const kare = { tasks: state.tasks, dayTitles: state.dayTitles, label };
+  const kare = {
+    tasks: state.tasks,
+    dayTitles: state.dayTitles,
+    goals: state.goals,
+    label,
+  };
   return { history: [...state.history, kare].slice(-HISTORY_LIMIT) };
 }
 
@@ -194,6 +210,7 @@ export const useTaskStore = create<TaskStore>()(
       editor: null,
       feedback: null,
       dayTitles: {},
+      goals: [],
       history: [],
 
       /* ---------------------------------------------------------------- */
@@ -410,6 +427,28 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       /* ---------------------------------------------------------------- */
+      addGoal: (input) => {
+        const id = createId();
+        set((s) => ({
+          ...snapshot(s, 'hedef eklendi'),
+          goals: [...s.goals, { ...input, id }],
+        }));
+        return id;
+      },
+
+      updateGoal: (id, patch) =>
+        set((s) => ({
+          ...snapshot(s, 'hedef düzenlendi'),
+          goals: s.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+        })),
+
+      deleteGoal: (id) =>
+        set((s) => ({
+          ...snapshot(s, 'hedef silindi'),
+          goals: s.goals.filter((g) => g.id !== id),
+        })),
+
+      /* ---------------------------------------------------------------- */
       undo: () => {
         const state = get();
         const last = state.history[state.history.length - 1];
@@ -418,6 +457,7 @@ export const useTaskStore = create<TaskStore>()(
         set({
           tasks: last.tasks,
           dayTitles: last.dayTitles,
+          goals: last.goals,
           history: state.history.slice(0, -1),
           feedback: { message: `Geri alındı: ${last.label}`, tone: 'info' },
           // Geri alınan blok silinmiş olabilir; açık pencere ve seçim
@@ -445,6 +485,7 @@ export const useTaskStore = create<TaskStore>()(
       // Senkron yolu: geçmişe kare bırakmaz (bkz. history alanının açıklaması).
       replaceTasks: (tasks) => set({ tasks: sortByStart(tasks) }),
       replaceDayTitles: (titles) => set({ dayTitles: titles }),
+      replaceGoals: (goals) => set({ goals }),
     }),
     {
       name: STORAGE_KEY,
@@ -464,6 +505,7 @@ export const useTaskStore = create<TaskStore>()(
         tasks: state.tasks,
         selectedDate: state.selectedDate,
         dayTitles: state.dayTitles,
+        goals: state.goals,
       }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).
