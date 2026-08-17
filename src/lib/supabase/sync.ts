@@ -70,6 +70,23 @@ let flushing = false;
 /** Sunucudan gelen veriyi yazarken kendi değişikliğimizi kuyruğa almayalım. */
 let applyingRemote = false;
 
+/**
+ * Eski örnek plan kimliği mi? (`mock-1`, `mock-2`, …)
+ *
+ * Bu kimlikler sabitti ve `tasks` tablosunun anahtarı yalnızca `id` olduğu
+ * için kullanıcılar arasında çakışıyordu: ikinci kullanıcı `mock-1`'i
+ * yazmaya çalışınca birincinin satırına çarpıyor, RLS reddediyor ve aynı
+ * gönderimdeki KENDİ blokları da kaydedilemiyordu.
+ *
+ * Sunucuda bu kimliklere sahip satırlar zaten olan kullanıcı (ilk sahibi)
+ * onları düzenlemeye devam edebilir — kendi satırı, güncellemesi geçerli.
+ * Engellediğimiz tek şey, o satırlar SUNUCUDA YOKKEN gönderilmeye
+ * çalışılması (bkz. initialSync).
+ */
+function isLegacyMockId(id: string): boolean {
+  return /^mock-\d+$/.test(id);
+}
+
 function signature(task: Task): string {
   return [
     task.title,
@@ -346,6 +363,15 @@ async function initialSync(): Promise<void> {
   const seedLeftovers = new Set<string>();
   for (const task of local) {
     if (serverIds.has(task.id)) continue;
+
+    // Sabit kimlikli eski örnek bloklar her koşulda atılır: başka bir
+    // kullanıcının satırıyla çakıştıkları için gönderilemezler ve kuyrukta
+    // kalırlarsa o cihazın senkronunu tamamen kilitlerler.
+    if (isLegacyMockId(task.id)) {
+      seedLeftovers.add(task.id);
+      continue;
+    }
+
     if (accountIsEmpty || !task.id.startsWith('mock-')) {
       outbox.set(task.id, { id: task.id, type: 'upsert' });
     } else {

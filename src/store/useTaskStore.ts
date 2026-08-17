@@ -185,7 +185,10 @@ function toFeedback(result: ScheduleResult): FlowFeedback {
 export const useTaskStore = create<TaskStore>()(
   persist(
     (set, get) => ({
-      tasks: createMockTasks(),
+      // Boş başlıyoruz. Örnek plan yalnızca kullanıcı isterse yüklenir:
+      // her yeni hesaba enjekte edilirse ikinci kullanıcı birincinin
+      // satırlarıyla çakışır ve kendi verisini kaydedemez.
+      tasks: [],
       selectedDate: startOfDay(new Date()),
       selectedTaskId: null,
       editor: null,
