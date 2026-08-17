@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
@@ -66,6 +67,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             karanlığa atlamasını (flash) engeller. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {children}
+        {/* Vercel Web Analytics: çerezsiz ve toplu. Kişi takip etmiyor,
+            IP saklamıyor — ziyaretçi sayısı, ülke, cihaz, yönlendiren. */}
+        <Analytics />
       </body>
     </html>
   );
