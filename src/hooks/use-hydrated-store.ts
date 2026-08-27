@@ -11,6 +11,11 @@ import { useTaskStore } from '@/store/useTaskStore';
  * Neden? Sunucu HTML'i mock veriyle render eder; tarayıcıda localStorage
  * farklı olabilir. Mount öncesi okursak React "hydration mismatch" hatası verir.
  * Bu hook `false` döndüğü sürece takvim yerine iskelet (skeleton) gösterilir.
+ *
+ * Okuma bitince görünümü BUGÜNE çekiyoruz. Eskiden `selectedDate` de
+ * localStorage'a yazılıyordu ve uygulama en son bakılan günü hatırlıyordu —
+ * ertesi gün açınca dünde kalıyordun. Artık kalıcı değil, ama eski
+ * kayıtlardan gelen bir tarih ihtimaline karşı burada da sıfırlıyoruz.
  */
 export function useHydratedStore(): boolean {
   const [hydrated, setHydrated] = useState(false);
@@ -18,7 +23,9 @@ export function useHydratedStore(): boolean {
   useEffect(() => {
     let cancelled = false;
     void Promise.resolve(useTaskStore.persist.rehydrate()).then(() => {
-      if (!cancelled) setHydrated(true);
+      if (cancelled) return;
+      useTaskStore.getState().goToToday();
+      setHydrated(true);
     });
     return () => {
       cancelled = true;

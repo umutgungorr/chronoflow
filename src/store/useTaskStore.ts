@@ -72,6 +72,11 @@ type TaskState = {
   /** Hedefler — ayrı sayfadaki geri sayımlar. */
   goals: Goal[];
   /**
+   * Uygulamanın "bugün" olarak bildiği gün ('YYYY-MM-DD').
+   * Gece yarısını geçtiğimizi anlamak için tutuluyor; kalıcı DEĞİL.
+   */
+  lastKnownToday: string;
+  /**
    * Geri alma yığını. Her KULLANICI değişikliğinden önce planın o anki hali
    * buraya bırakılır. Sunucudan gelen birleştirmeler (senkron) bilerek
    * dışarıda: uzaktaki bir değişikliği "geri almak" anlamsız.
@@ -128,6 +133,13 @@ type TaskActions = {
   addGoal: (input: Omit<Goal, 'id'>) => string;
   updateGoal: (id: string, patch: Partial<Omit<Goal, 'id'>>) => void;
   deleteGoal: (id: string) => void;
+
+  /* — Gün devri — */
+  /**
+   * Gece yarısı geçtiyse ve kullanıcı hâlâ eski "bugün"e bakıyorsa
+   * görünümü yeni güne taşır. Bilerek başka bir güne gitmişse dokunmaz.
+   */
+  rolloverToToday: (now: Date) => void;
 
   /* — Geri alma — */
   undo: () => void;
@@ -211,6 +223,7 @@ export const useTaskStore = create<TaskStore>()(
       feedback: null,
       dayTitles: {},
       goals: [],
+      lastKnownToday: dayKey(new Date()),
       history: [],
 
       /* ---------------------------------------------------------------- */
@@ -449,6 +462,23 @@ export const useTaskStore = create<TaskStore>()(
         })),
 
       /* ---------------------------------------------------------------- */
+      rolloverToToday: (now) => {
+        const bugun = dayKey(now);
+        const { lastKnownToday, selectedDate } = get();
+        if (lastKnownToday === bugun) return;
+
+        // Kullanıcı eski "bugün"ün üstündeyse yeni güne taşı. Geçmiş ya da
+        // gelecek bir güne bilerek gitmişse yerinden oynatmıyoruz.
+        const bakilanGun = dayKey(selectedDate);
+        set({
+          lastKnownToday: bugun,
+          ...(bakilanGun === lastKnownToday
+            ? { selectedDate: startOfDay(now) }
+            : {}),
+        });
+      },
+
+      /* ---------------------------------------------------------------- */
       undo: () => {
         const state = get();
         const last = state.history[state.history.length - 1];
@@ -501,9 +531,13 @@ export const useTaskStore = create<TaskStore>()(
           return value;
         },
       }),
+      /*
+       * `selectedDate` BİLEREK kalıcı değil: eskiden yazılıyordu ve uygulama
+       * en son bakılan günü sonsuza kadar hatırlıyordu — ertesi gün açınca
+       * dünde kalıyordun. Günlük planlayıcı her açılışta bugüne düşmeli.
+       */
       partialize: (state) => ({
         tasks: state.tasks,
-        selectedDate: state.selectedDate,
         dayTitles: state.dayTitles,
         goals: state.goals,
       }),

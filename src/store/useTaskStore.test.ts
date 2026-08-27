@@ -12,6 +12,7 @@ function kur(tasks = [gorev('a', '09:00', 60), gorev('b', '14:00', 60)]) {
     editor: null,
     feedback: null,
     dayTitles: {},
+    lastKnownToday: '2026-08-15',
     history: [],
   });
 }
@@ -179,5 +180,54 @@ describe('gün adı', () => {
   it('senkronun yazdığı adlar geçmişe girmez', () => {
     useTaskStore.getState().replaceDayTitles({ '2026-08-20': 'Uzaktan' });
     expect(gecmis()).toHaveLength(0);
+  });
+});
+
+describe('gün devri', () => {
+  const gun = () => useTaskStore.getState().selectedDate;
+  const bilinen = () => useTaskStore.getState().lastKnownToday;
+
+  it('aynı gün içinde hiçbir şey yapmaz', () => {
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 20));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 15, 23, 0));
+    expect(gun().getDate()).toBe(20);
+  });
+
+  it('gece yarısı geçince eski "bugün"den yeni güne taşır', () => {
+    // Kullanıcı 15'ine bakıyordu; saat 16'sına döndü.
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 15));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 16, 0, 1));
+
+    expect(gun().getDate()).toBe(16);
+    expect(bilinen()).toBe('2026-08-16');
+  });
+
+  it('bilerek gidilen güne dokunmaz, ama günü öğrenir', () => {
+    // Kullanıcı ileri bir günü planlıyordu; gece yarısı onu kaçırmasın.
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 25));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 16, 0, 1));
+
+    expect(gun().getDate()).toBe(25);
+    expect(bilinen()).toBe('2026-08-16');
+  });
+
+  it('geçmiş bir güne bakarken de yerinden oynatmaz', () => {
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 10));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 16, 0, 1));
+    expect(gun().getDate()).toBe(10);
+  });
+
+  it('birden çok gün atlansa da bugüne getirir', () => {
+    // Uygulama telefonda uykuda kaldı, üç gün sonra açıldı.
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 15));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 18, 9, 0));
+    expect(gun().getDate()).toBe(18);
+  });
+
+  it('taşınan gün, günün başlangıcına ayarlanır', () => {
+    useTaskStore.getState().setSelectedDate(new Date(2026, 7, 15));
+    useTaskStore.getState().rolloverToToday(new Date(2026, 7, 16, 14, 37));
+    expect(gun().getHours()).toBe(0);
+    expect(gun().getMinutes()).toBe(0);
   });
 });

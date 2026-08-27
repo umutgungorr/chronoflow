@@ -9,6 +9,7 @@ import { SyncBridge } from '@/components/layout/SyncStatus';
 import { DailyStats } from '@/components/stats/DailyStats';
 import { TaskModal } from '@/components/tasks/TaskModal';
 import { TimelineGrid } from '@/components/timeline/TimelineGrid';
+import { useDayRollover } from '@/hooks/use-day-rollover';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
 import { useUndoShortcut } from '@/hooks/use-undo-shortcut';
 import { useVisitLog } from '@/hooks/use-visit-log';
@@ -24,6 +25,7 @@ export default function Home() {
 function Planner() {
   const hydrated = useHydratedStore();
   useUndoShortcut();
+  useDayRollover();
   useVisitLog();
 
   return (
