@@ -18,7 +18,7 @@ Next.js tabanlı, Türkçe ve local-first günlük planlama uygulaması.
 - Geri alma desteği ve otomatik gün geçişi
 - Açık/koyu tema ve kurulabilir PWA deneyimi
 - Local-first kullanım; Supabase ile isteğe bağlı giriş ve senkronizasyon
-- Yönetim ekranı ve anonim ziyaret istatistikleri
+- Yönetim ekranı ve giriş yapmış kullanıcılar için sınırlı ziyaret istatistikleri
 
 ## Teknoloji yığını
 
@@ -56,6 +56,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 Supabase kullanacaksan `supabase/` klasöründeki SQL dosyalarını kendi projen üzerinde uygula.
 
+Gerçek anahtarları yalnızca `.env.local` içinde tut; bu dosya Git tarafından izlenmez. Ziyaret kaydı özelliği etkinleştirildiğinde yalnızca giriş yapmış kullanıcıların IP, user-agent, yol ve referer bilgileri yönetici görünümü için saklanır.
+
 ## Komutlar
 
 ```bash
@@ -81,5 +83,5 @@ supabase/         veritabanı şeması ve ek SQL tanımları
 
 ## Durum
 
-ChronoFlow aktif geliştirme aşamasındadır. Repository şu anda özeldir.
+ChronoFlow aktif geliştirme aşamasında, açık kaynak bir portföy projesidir.
 

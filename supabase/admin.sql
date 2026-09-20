@@ -22,17 +22,17 @@ create policy admins_select_self on public.admins
 revoke all on public.admins from anon, authenticated;
 grant select on public.admins to authenticated;
 
--- Proje sahibini yönetici yap.
+-- Proje sahibini yönetici yap. Çalıştırmadan önce adresi kendi hesabınla değiştir.
 insert into public.admins (user_id)
-select id from auth.users where email = 'umutm7944@gmail.com'
+select id from auth.users where email = 'YOUR_EMAIL@example.com'
 on conflict (user_id) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 2) Ziyaret kaydı
 -- ---------------------------------------------------------------------------
 -- IP yalnızca sunucu tarafında görülebildiği için satırları /api/visit
--- route handler'ı yazıyor. Giriş yapmış kullanıcı kendi kimliğiyle,
--- ziyaretçi ise user_id boş olarak kaydedilir.
+-- route handler'ı yazar. Yalnızca doğrulanmış oturumu olan kullanıcıların
+-- ziyaretleri kaydedilir.
 create table if not exists public.visits (
   id          bigint generated always as identity primary key,
   occurred_at timestamptz not null default now(),
@@ -52,15 +52,13 @@ drop policy if exists visits_select_admin on public.visits;
 create policy visits_select_admin on public.visits
   for select using (exists (select 1 from public.admins a where a.user_id = auth.uid()));
 
--- Yazma: herkes ekleyebilir AMA kendi adına. Giriş yapmamış ziyaretçi
--- yalnızca user_id'si boş satır yazabilir; giriş yapmış kullanıcı
--- başkasının kimliğiyle satır uyduramaz.
+-- Yazma: yalnızca giriş yapmış kullanıcı kendi adına kayıt ekleyebilir.
 drop policy if exists visits_insert_own on public.visits;
 create policy visits_insert_own on public.visits
-  for insert with check (user_id is null or auth.uid() = user_id);
+  for insert with check (auth.uid() = user_id);
 
 revoke all on public.visits from anon, authenticated;
-grant insert on public.visits to anon, authenticated;
+grant insert on public.visits to authenticated;
 grant select on public.visits to authenticated;
 
 -- ---------------------------------------------------------------------------
