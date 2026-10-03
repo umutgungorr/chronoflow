@@ -85,3 +85,6 @@ supabase/         veritabanı şeması ve ek SQL tanımları
 
 ChronoFlow aktif geliştirme aşamasında, açık kaynak bir portföy projesidir.
 
+## Geliştirici ve vaka çalışması
+
+ChronoFlow, Umut Güngör’ün açık kaynak projelerinden biridir. Uygulamanın amacı, teknik tercihleri ve mevcut sınırları için [proje vaka çalışmasına](https://umutgungorr.com/projects/chronoflow) göz atın. Diğer çalışmaları [umutgungorr.com](https://umutgungorr.com/) adresinde görebilirsiniz.
