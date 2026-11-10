@@ -90,7 +90,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</div>
+      {/* Ana plan sayfasında (/) iç takvim ızgarası kendi içinde kayar.
+          Dış kabukta da overflow-y-auto olursa çift scrollbar oluşur ve
+          kaydırma takılır. Diğer sayfalarda dikey akış serbesttir. */}
+      <div
+        className={cn(
+          'min-h-0 min-w-0 flex-1',
+          pathname === '/' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto',
+        )}
+      >
+        {children}
+      </div>
 
       <nav
         aria-label="Ana menü"
