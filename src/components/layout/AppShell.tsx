@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CalendarRange, Flame, LayoutGrid, ShieldCheck, Target, TrendingUp } from 'lucide-react';
@@ -17,19 +18,19 @@ const ITEMS = [
 
 const ADMIN_ITEM = { href: '/admin', label: 'Yönetim', icon: ShieldCheck } as const;
 
-/** Marka işareti: iki zıt eğimli şerit — akan zamanı simgeleyen "S". */
+/** Yeni ChronoFlow marka logosu. */
 function Logo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <defs>
-        <linearGradient id="cf-logo" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#5af5d2" />
-          <stop offset="1" stopColor="#12a8c9" />
-        </linearGradient>
-      </defs>
-      <path d="M6 4h20v6l-8 6 8 6v6H6v-6l8-6-8-6V4Z" fill="url(#cf-logo)" opacity="0.92" />
-      <path d="M10 8h12v1.6L16 14l-6-4.4V8Z" fill="#05080c" opacity="0.55" />
-    </svg>
+    <div className={cn('relative flex items-center justify-center shrink-0', className)}>
+      <Image
+        src="/logo.png"
+        alt="ChronoFlow Logo"
+        width={44}
+        height={44}
+        priority
+        className="size-full object-contain drop-shadow-[0_0_14px_rgba(46,230,184,0.35)]"
+      />
+    </div>
   );
 }
 
