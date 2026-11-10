@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Trash2 } from 'lucide-react';
+import { CalendarPlus, Pencil, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { formatRemaining, getGoalProgress, parseDayKey, type Goal } from '@/lib/goals';
@@ -12,6 +12,8 @@ type Props = {
   now: Date;
   onEdit: (goal: Goal) => void;
   onDelete: (id: string) => void;
+  /** Bugüne bu hedef için 1 saatlik blok ekler. */
+  onSchedule: (goal: Goal) => void;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = {
  * çubuk da yüzdeyi çiziyor. Sıralama zaten yaklaşanı öne aldığı için
  * ekranın üstü hep en yakın tarihi gösteriyor.
  */
-export function GoalCard({ goal, now, onEdit, onDelete }: Props) {
+export function GoalCard({ goal, now, onEdit, onDelete, onSchedule }: Props) {
   const ilerleme = getGoalProgress(goal, now);
   const hedefTarihi = parseDayKey(goal.targetDate);
 
@@ -44,6 +46,16 @@ export function GoalCard({ goal, now, onEdit, onDelete }: Props) {
         </div>
 
         <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            onClick={() => onSchedule(goal)}
+            aria-label={`${goal.title} için bugüne blok ekle`}
+            title="Bugüne 1 saatlik blok ekle"
+          >
+            <CalendarPlus className="size-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"

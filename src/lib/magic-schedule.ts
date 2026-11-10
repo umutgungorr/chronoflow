@@ -270,3 +270,48 @@ export function planIntoDay(
 
   return { blocks, skipped };
 }
+
+
+/* -------------------------------------------------------------------------- */
+/*  3. LLM çıktısını doğrulama                                                */
+/* -------------------------------------------------------------------------- */
+
+const VALID_CATEGORIES: TaskCategory[] = ['WORK', 'ROUTINE', 'HEALTH', 'URGENT', 'SOCIAL', 'BUFFER'];
+const VALID_DAY_PARTS: Exclude<DayPart, null>[] = ['sabah', 'ogle', 'aksam'];
+const MAX_AI_ITEMS = 20;
+
+/**
+ * Dışarıdan (LLM) gelen JSON'u güvenli `ScheduleItem[]`'e çevirir.
+ * Model hatalı/uydurma alan döndürebilir; burada hiçbir şeye güvenmiyoruz:
+ * süre 15dk'ya yuvarlanır, 15dk–12 saat aralığına kırpılır, kategori
+ * bilinmiyorsa WORK olur, tampon blokları kullanıcı bunu zaten ayrıca seçer.
+ */
+export function sanitizeScheduleItems(raw: unknown): ScheduleItem[] {
+  if (!Array.isArray(raw)) return [];
+
+  const items: ScheduleItem[] = [];
+  for (const entry of raw.slice(0, MAX_AI_ITEMS)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { title, duration, category, dayPart } = entry as Record<string, unknown>;
+
+    const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 80) : '';
+    const minutes = typeof duration === 'number' && Number.isFinite(duration) ? duration : NaN;
+    if (!cleanTitle || Number.isNaN(minutes)) continue;
+
+    const snapped = Math.round(minutes / SLOT_MINUTES) * SLOT_MINUTES;
+    const safeCategory = VALID_CATEGORIES.includes(category as TaskCategory)
+      ? (category as TaskCategory)
+      : 'WORK';
+
+    items.push({
+      title: cleanTitle,
+      duration: Math.min(12 * 60, Math.max(MIN_TASK_MINUTES, snapped)),
+      category: safeCategory === 'BUFFER' ? 'ROUTINE' : safeCategory,
+      dayPart: VALID_DAY_PARTS.includes(dayPart as Exclude<DayPart, null>)
+        ? (dayPart as DayPart)
+        : null,
+    });
+  }
+
+  return items;
+}

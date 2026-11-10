@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Lock, Trash2 } from 'lucide-react';
 
 import { CategoryPicker } from '@/components/tasks/CategoryPicker';
+import { SubtaskList } from '@/components/tasks/SubtaskList';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -233,6 +234,8 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               onChange={(event) => patch({ description: event.target.value })}
             />
           </div>
+
+          {taskId && <SubtaskList taskId={taskId} />}
 
           <div className="space-y-2.5 rounded-md border bg-muted/40 p-3">
             <label className="flex items-start gap-2.5 text-sm">

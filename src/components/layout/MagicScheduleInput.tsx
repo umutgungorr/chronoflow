@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { postAi } from '@/lib/ai-client';
+import { sanitizeScheduleItems, type ScheduleItem } from '@/lib/magic-schedule';
 import { useTaskStore } from '@/store/useTaskStore';
 
 const EXAMPLE = '2 saat kod yazacağım, 1 saat spor, akşam 30 dk kitap';
@@ -13,19 +15,32 @@ const EXAMPLE = '2 saat kod yazacağım, 1 saat spor, akşam 30 dk kitap';
 /**
  * "Günüme Dağıt" girdisi.
  *
- * Metni ayrıştırıp boş saatlere blok olarak dağıtır. Ayrıştırma kural
- * tabanlı ve çevrimdışı çalışır (bkz. lib/magic-schedule.ts) — sonuç
- * deterministik, yani aynı cümle her zaman aynı planı üretir.
+ * Önce sunucudaki LLM (Gemini) denenir; yapılandırılmamışsa, oturum yoksa ya
+ * da istek başarısızsa kural tabanlı yerel ayrıştırıcıya düşer
+ * (bkz. lib/magic-schedule.ts). Yani AI olmadan da her şey çalışır.
  */
 export function MagicScheduleInput() {
   const applyMagicSchedule = useTaskStore((s) => s.applyMagicSchedule);
+  const applyScheduleItems = useTaskStore((s) => s.applyScheduleItems);
   const [text, setText] = useState('');
   const [withBuffers, setWithBuffers] = useState(true);
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = () => {
-    if (!text.trim()) return;
-    const { placed } = applyMagicSchedule(text, { withBuffers });
-    if (placed > 0) setText('');
+  const handleSubmit = async () => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    try {
+      const ai = await postAi<{ items: unknown }>('/api/plan', { text });
+      const items: ScheduleItem[] = ai ? sanitizeScheduleItems(ai.items) : [];
+
+      const { placed } =
+        items.length > 0
+          ? applyScheduleItems(items, { withBuffers })
+          : applyMagicSchedule(text, { withBuffers });
+      if (placed > 0) setText('');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -34,7 +49,7 @@ export function MagicScheduleInput() {
         className="flex gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          handleSubmit();
+          void handleSubmit();
         }}
       >
         <Input
@@ -44,8 +59,12 @@ export function MagicScheduleInput() {
           aria-label="Gününü anlat, bloklara dağıtayım"
           className="h-9 bg-canvas"
         />
-        <Button type="submit" className="h-9 shrink-0 gap-1.5 px-3" disabled={!text.trim()}>
-          <Sparkles className="size-3.5" />
+        <Button
+          type="submit"
+          className="h-9 shrink-0 gap-1.5 px-3"
+          disabled={!text.trim() || busy}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
           Günüme dağıt
         </Button>
       </form>

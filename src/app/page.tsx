@@ -13,6 +13,8 @@ import { useDayRollover } from '@/hooks/use-day-rollover';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
 import { useUndoShortcut } from '@/hooks/use-undo-shortcut';
 import { useVisitLog } from '@/hooks/use-visit-log';
+import { useNotificationRunner } from '@/hooks/use-block-notifications';
+import { useRoutines } from '@/hooks/use-routines';
 
 export default function Home() {
   return (
@@ -27,6 +29,8 @@ function Planner() {
   useUndoShortcut();
   useDayRollover();
   useVisitLog();
+  useRoutines();
+  useNotificationRunner();
 
   return (
     <main className="mx-auto flex h-dvh w-full max-w-6xl flex-col px-4 pb-4 pt-5 sm:px-6 sm:pb-6">

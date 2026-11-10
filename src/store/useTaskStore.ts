@@ -31,6 +31,15 @@ import {
   toDayMinutes,
 } from '@/lib/time';
 import type { Goal } from '@/lib/goals';
+import type { Subtask } from '@/lib/focus';
+import {
+  DAY_TEMPLATES,
+  planRoutinesIntoDay,
+  planTemplateIntoDay,
+  type Routine,
+  type RoutineInput,
+} from '@/lib/routines';
+import type { ScheduleItem } from '@/lib/magic-schedule';
 import type { ScheduleResult, Task, TaskInput } from '@/types';
 
 /* -------------------------------------------------------------------------- */
@@ -82,6 +91,15 @@ type TaskState = {
    * dışarıda: uzaktaki bir değişikliği "geri almak" anlamsız.
    */
   history: HistoryEntry[];
+  /**
+   * Blokların alt görevleri (taskId → liste). Yalnızca bu cihazda saklanır,
+   * Supabase ile senkronlanmaz (şemada karşılığı yok).
+   */
+  subtasks: Record<string, Subtask[]>;
+  /** Tekrarlayan blok kuralları. Yerel. */
+  routines: Routine[];
+  /** Hangi güne hangi rutinler işlendi (dayKey → rutin id'leri). Yerel. */
+  routineApplied: Record<string, string[]>;
 };
 
 /** Geçmişteki bir kare: o andaki plan + ne yapıldığının adı. */
@@ -143,6 +161,26 @@ type TaskActions = {
 
   /* — Geri alma — */
   undo: () => void;
+
+  /* — Alt görevler — */
+  addSubtask: (taskId: string, title: string) => void;
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
+
+  /* — Rutinler ve şablonlar — */
+  addRoutine: (input: RoutineInput) => void;
+  deleteRoutine: (id: string) => void;
+  /** O gün için henüz işlenmemiş rutinleri boş yerlere koyar. Geçmiş güne dokunmaz. */
+  applyRoutinesToDay: (day: Date) => number;
+  applyTemplate: (templateId: string) => { placed: number; skipped: number };
+
+  /* — AI/LLM çıktısını yerleştirme — */
+  applyScheduleItems: (
+    items: ScheduleItem[],
+    options?: { withBuffers?: boolean },
+  ) => { placed: number; skipped: number };
+  /** Bugünün ilk uygun boşluğuna 1 saatlik bir blok koyar (hedeften plana). */
+  addGoalBlock: (title: string) => boolean;
 
   /* — Yardımcılar — */
   resetToMock: () => void;
@@ -225,6 +263,9 @@ export const useTaskStore = create<TaskStore>()(
       goals: [],
       lastKnownToday: dayKey(new Date()),
       history: [],
+      subtasks: {},
+      routines: [],
+      routineApplied: {},
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
@@ -276,6 +317,7 @@ export const useTaskStore = create<TaskStore>()(
         set((s) => ({
           ...snapshot(s, 'blok silindi'),
           tasks: s.tasks.filter((t) => t.id !== id),
+          subtasks: Object.fromEntries(Object.entries(s.subtasks).filter(([key]) => key !== id)),
           selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
           // Silinen görev düzenleniyorsa pencere de kapanmalı.
           editor: s.editor?.mode === 'edit' && s.editor.taskId === id ? null : s.editor,
@@ -357,7 +399,6 @@ export const useTaskStore = create<TaskStore>()(
 
       /* ---------------------------------------------------------------- */
       applyMagicSchedule: (text, options = {}) => {
-        const state = get();
         const items = parseSchedulePrompt(text);
 
         if (items.length === 0) {
@@ -369,6 +410,14 @@ export const useTaskStore = create<TaskStore>()(
           });
           return { placed: 0, skipped: 0 };
         }
+
+        return get().applyScheduleItems(items, options);
+      },
+
+      applyScheduleItems: (items, options = {}) => {
+        const state = get();
+
+        if (items.length === 0) return { placed: 0, skipped: 0 };
 
         const day = state.selectedDate;
         // Bugün planlanıyorsa geçmiş saatlere blok koymayız.
@@ -408,6 +457,36 @@ export const useTaskStore = create<TaskStore>()(
         });
 
         return { placed, skipped: skipped.length };
+      },
+
+      addGoalBlock: (title) => {
+        const state = get();
+        const today = startOfDay(new Date());
+        const from = snapMinutes(toDayMinutes(new Date()));
+        const slot =
+          findFreeSlots(state.tasks, today, { from, minDuration: 60 })[0] ??
+          findFreeSlots(state.tasks, today, { minDuration: 60 })[0];
+
+        if (!slot) {
+          set({ feedback: { message: 'Bugün 1 saatlik boş yer yok.', tone: 'warning' } });
+          return false;
+        }
+
+        const task: Task = {
+          id: createId(),
+          title,
+          startTime: fromDayMinutes(today, slot.start),
+          endTime: fromDayMinutes(today, slot.start + 60),
+          category: 'WORK',
+          isCompleted: false,
+          isFixed: false,
+        };
+        set({
+          ...snapshot(state, 'hedef bloğu eklendi'),
+          tasks: sortByStart([...state.tasks, task]),
+          feedback: { message: 'Hedef için bugüne 1 saatlik blok eklendi.', tone: 'info' },
+        });
+        return true;
       },
 
       /* ---------------------------------------------------------------- */
@@ -479,6 +558,94 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       /* ---------------------------------------------------------------- */
+      addSubtask: (taskId, title) => {
+        const clean = title.trim().slice(0, 120);
+        if (!clean) return;
+        set((s) => ({
+          subtasks: {
+            ...s.subtasks,
+            [taskId]: [...(s.subtasks[taskId] ?? []), { id: createId(), title: clean, done: false }],
+          },
+        }));
+      },
+
+      toggleSubtask: (taskId, subtaskId) =>
+        set((s) => ({
+          subtasks: {
+            ...s.subtasks,
+            [taskId]: (s.subtasks[taskId] ?? []).map((st) =>
+              st.id === subtaskId ? { ...st, done: !st.done } : st,
+            ),
+          },
+        })),
+
+      deleteSubtask: (taskId, subtaskId) =>
+        set((s) => ({
+          subtasks: {
+            ...s.subtasks,
+            [taskId]: (s.subtasks[taskId] ?? []).filter((st) => st.id !== subtaskId),
+          },
+        })),
+
+      /* ---------------------------------------------------------------- */
+      addRoutine: (input) =>
+        set((s) => ({ routines: [...s.routines, { ...input, id: createId() }] })),
+
+      deleteRoutine: (id) =>
+        set((s) => ({ routines: s.routines.filter((r) => r.id !== id) })),
+
+      applyRoutinesToDay: (day) => {
+        const state = get();
+        const key = dayKey(day);
+        // Geçmiş günlere geriye dönük blok eklemiyoruz.
+        if (key < dayKey(new Date()) || state.routines.length === 0) return 0;
+
+        const { created, handledIds } = planRoutinesIntoDay(
+          state.tasks,
+          state.routines,
+          day,
+          state.routineApplied[key] ?? [],
+          createId,
+        );
+        if (handledIds.length === 0) return 0;
+
+        // Geçmişe kare bırakmıyoruz: otomatik eklemeyi "geri al" kullanıcıyı şaşırtır.
+        set({
+          tasks: created.length > 0 ? sortByStart([...state.tasks, ...created]) : state.tasks,
+          routineApplied: {
+            ...state.routineApplied,
+            [key]: [...(state.routineApplied[key] ?? []), ...handledIds],
+          },
+        });
+        return created.length;
+      },
+
+      applyTemplate: (templateId) => {
+        const state = get();
+        const template = DAY_TEMPLATES.find((t) => t.id === templateId);
+        if (!template) return { placed: 0, skipped: 0 };
+
+        const { created, skipped } = planTemplateIntoDay(
+          state.tasks,
+          state.selectedDate,
+          template,
+          createId,
+        );
+
+        set({
+          ...snapshot(state, `${template.name} şablonu uygulandı`),
+          tasks: sortByStart([...state.tasks, ...created]),
+          feedback: {
+            message:
+              `${template.name}: ${created.length} blok eklendi` +
+              (skipped > 0 ? `, ${skipped} blok mevcut planla çakıştığı için atlandı.` : '.'),
+            tone: skipped > 0 ? 'warning' : 'info',
+          },
+        });
+        return { placed: created.length, skipped };
+      },
+
+      /* ---------------------------------------------------------------- */
       undo: () => {
         const state = get();
         const last = state.history[state.history.length - 1];
@@ -540,6 +707,9 @@ export const useTaskStore = create<TaskStore>()(
         tasks: state.tasks,
         dayTitles: state.dayTitles,
         goals: state.goals,
+        subtasks: state.subtasks,
+        routines: state.routines,
+        routineApplied: state.routineApplied,
       }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
 
 import { AppNav } from '@/components/layout/AppNav';
 import { DayTitle } from '@/components/layout/DayTitle';
+import { DayToolsSheet } from '@/components/layout/DayToolsSheet';
 import { DailyStats } from '@/components/stats/DailyStats';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,7 +98,8 @@ export function AppHeader() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <DayToolsSheet />
         <div className="flex items-center rounded-md border bg-canvas">
           <Button
             variant="ghost"

@@ -34,6 +34,7 @@ function Goals() {
 
   const goals = useTaskStore((s) => s.goals);
   const deleteGoal = useTaskStore((s) => s.deleteGoal);
+  const addGoalBlock = useTaskStore((s) => s.addGoalBlock);
   const [editor, setEditor] = useState<GoalEditorState>(null);
 
   // Sayfa açık dururken gün değişirse geri sayım kendini güncellesin.
@@ -89,6 +90,7 @@ function Goals() {
                   now={now}
                   onEdit={(g) => setEditor({ mode: 'edit', goal: g })}
                   onDelete={deleteGoal}
+                  onSchedule={(g) => addGoalBlock(g.title)}
                 />
               ))}
             </ul>

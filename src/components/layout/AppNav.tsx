@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 
 const SEKMELER = [
   { href: '/', label: 'Plan' },
+  { href: '/hafta', label: 'Hafta' },
+  { href: '/odak', label: 'Odak' },
   { href: '/hedefler', label: 'Hedefler' },
 ] as const;
 
