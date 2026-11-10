@@ -7,8 +7,9 @@ import { tr } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { AuthGate } from '@/components/auth/AuthGate';
-import { AppNav } from '@/components/layout/AppNav';
+import { AppShell } from '@/components/layout/AppShell';
 import { SyncBridge } from '@/components/layout/SyncStatus';
+import { ViewTabs } from '@/components/layout/ViewTabs';
 import { Button } from '@/components/ui/button';
 import { useDayRollover } from '@/hooks/use-day-rollover';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
@@ -21,7 +22,9 @@ import { CATEGORY_META } from '@/types';
 export default function WeekPage() {
   return (
     <AuthGate>
-      <Week />
+      <AppShell>
+        <Week />
+      </AppShell>
     </AuthGate>
   );
 }
@@ -31,7 +34,7 @@ function Week() {
   useDayRollover();
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 pb-10 pt-5 sm:px-6">
+    <main className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-4 pb-10 pt-5 sm:px-6">
       {hydrated ? (
         <>
           <SyncBridge />
@@ -60,10 +63,10 @@ function WeekBody() {
     <>
       <header className="flex flex-col gap-4 pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <AppNav />
           <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
             Hafta
           </h1>
+          <ViewTabs />
           <p className="font-mono text-xs text-muted-foreground">
             {format(days[0]!, 'd MMM', { locale: tr })} – {format(days[6]!, 'd MMM yyyy', { locale: tr })}
           </p>

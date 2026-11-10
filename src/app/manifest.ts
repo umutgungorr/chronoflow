@@ -21,8 +21,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // Açılış ekranının rengi. Tema sisteme göre değiştiği için tek bir değer
     // seçmek zorundayız; mürekkep tarafını tercih ettim — akşam kullanımda
     // beyaz bir parlama, sabah kullanımda koyu bir kareden daha rahatsız.
-    background_color: '#080a0e',
-    theme_color: '#080a0e',
+    background_color: '#05080c',
+    theme_color: '#05080c',
     icons: [
       {
         src: '/icon-192.png',

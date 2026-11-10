@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Plus, Target } from 'lucide-react';
 
 import { AuthGate } from '@/components/auth/AuthGate';
+import { AppShell } from '@/components/layout/AppShell';
 import { GoalCard } from '@/components/goals/GoalCard';
 import { GoalModal, type GoalEditorState } from '@/components/goals/GoalModal';
-import { AppNav } from '@/components/layout/AppNav';
 import { FlowToast } from '@/components/layout/FlowToast';
 import { SyncBridge } from '@/components/layout/SyncStatus';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,9 @@ import { useTaskStore } from '@/store/useTaskStore';
 export default function HedeflerPage() {
   return (
     <AuthGate>
-      <Goals />
+      <AppShell>
+        <Goals />
+      </AppShell>
     </AuthGate>
   );
 }
@@ -43,14 +45,13 @@ function Goals() {
   const now = new Date();
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col px-4 pb-10 pt-5 sm:px-6">
+    <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 pb-10 pt-5 sm:px-6">
       {hydrated ? (
         <>
           <SyncBridge />
 
           <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1.5">
-              <AppNav />
               <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
                 Hedefler
               </h1>

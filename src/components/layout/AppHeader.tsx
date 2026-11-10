@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
 
-import { AppNav } from '@/components/layout/AppNav';
 import { DayTitle } from '@/components/layout/DayTitle';
 import { DayToolsSheet } from '@/components/layout/DayToolsSheet';
+import { ViewTabs } from '@/components/layout/ViewTabs';
 import { DailyStats } from '@/components/stats/DailyStats';
 import { Button } from '@/components/ui/button';
 import {
@@ -63,11 +63,11 @@ export function AppHeader() {
   return (
     <header className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="space-y-1.5">
-        <AppNav />
         <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
           {formatDayLabel(day)}
         </h1>
         <DayTitle />
+        <ViewTabs />
         {/* Özet satırının kendisi düğme: telefonda dokununca kadranı açar.
             Geniş ekranda kadran zaten sağda durduğu için tıklanamaz olur. */}
         <button

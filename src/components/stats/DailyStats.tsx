@@ -9,9 +9,9 @@ import { cn } from '@/lib/utils';
 import { useTaskStore, useTasksForSelectedDay } from '@/store/useTaskStore';
 import { CATEGORY_META, type TaskCategory } from '@/types';
 
-const SIZE = 176;
-const RADIUS = 74;
-const STROKE = 13;
+const SIZE = 200;
+const RADIUS = 84;
+const STROKE = 12;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /** Dakika → kadran üzerindeki yay uzunluğu. */
@@ -57,7 +57,7 @@ export function DailyStats({ onNavigate }: Props = {}) {
   );
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-canvas p-4">
+    <section className="flex flex-col gap-4 rounded-2xl border bg-canvas/80 p-5 shadow-[0_0_40px_-20px_var(--primary)] backdrop-blur">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Günün dağılımı</h2>
         <span className="font-mono text-[11px] text-muted-foreground">
@@ -66,7 +66,13 @@ export function DailyStats({ onNavigate }: Props = {}) {
       </div>
 
       <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden>
+        <svg
+          width={SIZE}
+          height={SIZE}
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
+          aria-hidden
+          style={{ filter: 'drop-shadow(0 0 8px rgb(46 230 184 / 0.18))' }}
+        >
           {/* -90°: yay 3 yönünde değil, saat 12'de (00:00) başlasın. */}
           <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
             <circle
@@ -74,7 +80,7 @@ export function DailyStats({ onNavigate }: Props = {}) {
               cy={SIZE / 2}
               r={RADIUS}
               fill="none"
-              stroke="var(--rule-soft)"
+              stroke="var(--rule)"
               strokeWidth={STROKE}
             />
 
@@ -132,7 +138,7 @@ export function DailyStats({ onNavigate }: Props = {}) {
         </svg>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-xl font-semibold leading-none">
+          <span className="font-mono text-3xl font-semibold leading-none">
             {formatDuration(planned)}
           </span>
           <span className="mt-1 text-[11px] text-muted-foreground">planlı</span>

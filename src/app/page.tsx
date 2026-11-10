@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/AuthGate';
+import { AppShell } from '@/components/layout/AppShell';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { CategoryLegend } from '@/components/layout/CategoryLegend';
 import { FlowToast } from '@/components/layout/FlowToast';
@@ -19,7 +20,9 @@ import { useRoutines } from '@/hooks/use-routines';
 export default function Home() {
   return (
     <AuthGate>
-      <Planner />
+      <AppShell>
+        <Planner />
+      </AppShell>
     </AuthGate>
   );
 }
@@ -33,7 +36,7 @@ function Planner() {
   useNotificationRunner();
 
   return (
-    <main className="mx-auto flex h-dvh w-full max-w-6xl flex-col px-4 pb-4 pt-5 sm:px-6 sm:pb-6">
+    <main className="mx-auto flex h-full w-full max-w-6xl flex-col px-4 pb-4 pt-5 sm:px-6 sm:pb-6">
       {hydrated ? (
         <>
           {/* Senkron yalnızca localStorage okunduktan SONRA başlar. */}

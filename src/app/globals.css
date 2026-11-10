@@ -112,40 +112,41 @@
 }
 
 .dark {
-  --background: #080a0e;
-  --canvas: #11141a;
-  --foreground: #e8ebf0;
+  /* Gece mavisi zemin, neon turkuaz vurgu. */
+  --background: #05080c;
+  --canvas: #0a1015;
+  --foreground: #e6f1ee;
 
-  --rule: #1f242e;
-  --rule-soft: #171b23;
-  --tick: #3b4353;
-  --now: #f2f4f7;
-  --now-contrast: #11141a;
+  --rule: #14212a;
+  --rule-soft: #0f1a21;
+  --tick: #2b3d49;
+  --now: #2ee6b8;
+  --now-contrast: #04201a;
 
-  --card: #11141a;
-  --card-foreground: #e8ebf0;
-  --popover: #171b23;
-  --popover-foreground: #e8ebf0;
-  --primary: #e8ebf0;
-  --primary-foreground: #11141a;
-  --secondary: #1c212a;
-  --secondary-foreground: #e8ebf0;
-  --muted: #1c212a;
-  --muted-foreground: #8a94a6;
-  --accent: #1c212a;
-  --accent-foreground: #e8ebf0;
+  --card: #0a1015;
+  --card-foreground: #e6f1ee;
+  --popover: #0d151b;
+  --popover-foreground: #e6f1ee;
+  --primary: #2ee6b8;
+  --primary-foreground: #04201a;
+  --secondary: #121c23;
+  --secondary-foreground: #e6f1ee;
+  --muted: #121c23;
+  --muted-foreground: #7f9199;
+  --accent: #13232b;
+  --accent-foreground: #e6f1ee;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: #232936;
-  --input: #232936;
-  --ring: #4a5468;
-  --sidebar: #11141a;
-  --sidebar-foreground: #e8ebf0;
-  --sidebar-primary: #e8ebf0;
-  --sidebar-primary-foreground: #11141a;
-  --sidebar-accent: #1c212a;
-  --sidebar-accent-foreground: #e8ebf0;
-  --sidebar-border: #232936;
-  --sidebar-ring: #4a5468;
+  --border: #172630;
+  --input: #172630;
+  --ring: #1fb596;
+  --sidebar: #070c10;
+  --sidebar-foreground: #e6f1ee;
+  --sidebar-primary: #2ee6b8;
+  --sidebar-primary-foreground: #04201a;
+  --sidebar-accent: #13232b;
+  --sidebar-accent-foreground: #e6f1ee;
+  --sidebar-border: #172630;
+  --sidebar-ring: #1fb596;
 }
 
 @layer base {
@@ -154,6 +155,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Köşelerde çok hafif turkuaz ışıma. */
+    background-image:
+      radial-gradient(60rem 36rem at 100% 0%, rgb(46 230 184 / 0.05), transparent 60%),
+      radial-gradient(50rem 30rem at 0% 100%, rgb(18 168 201 / 0.07), transparent 60%);
+    background-attachment: fixed;
     /* Saat rakamları hizada kalsın diye tüm arayüzde tabular rakam. */
     font-variant-numeric: tabular-nums;
   }

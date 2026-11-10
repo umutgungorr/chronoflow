@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
-import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 /*
   İki yazı karakteri, iki net görev:
@@ -45,10 +44,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   // Telefonun durum çubuğu uygulamanın zeminiyle aynı renge boyanır.
   // Manifest tek renk kabul ediyor ama burada temaya göre ayırabiliyoruz.
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eef0f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#080a0e" },
-  ],
+  themeColor: "#05080c",
   // Izgara zaten dokunmatikte sürükleniyor; çift dokunuşla yakınlaşma
   // kazayla tetikleniyor ve blok taşımayı bozuyor.
   maximumScale: 1,
@@ -58,14 +54,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="tr"
-      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+      className={`${sans.variable} ${mono.variable} dark h-full antialiased`}
       // Tema betiği <html> sınıfını sunucudan farklı hale getirebilir.
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col">
         {/* React yüklenmeden çalışır: açık temanın bir kare görünüp
             karanlığa atlamasını (flash) engeller. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {children}
         {/* Vercel Web Analytics: çerezsiz ve toplu. Kişi takip etmiyor,
             IP saklamıyor — ziyaretçi sayısı, ülke, cihaz, yönlendiren. */}

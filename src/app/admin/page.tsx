@@ -6,7 +6,7 @@ import { tr } from 'date-fns/locale';
 import { RefreshCw, ShieldAlert } from 'lucide-react';
 
 import { AuthGate } from '@/components/auth/AuthGate';
-import { AppNav } from '@/components/layout/AppNav';
+import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/button';
 import { describeUserAgent } from '@/lib/supabase/admin';
 import { useAdminDataStore } from '@/store/useAdminDataStore';
@@ -15,7 +15,9 @@ import { useAuthStore } from '@/store/useAuthStore';
 export default function AdminPage() {
   return (
     <AuthGate>
-      <Admin />
+      <AppShell>
+        <Admin />
+      </AppShell>
     </AuthGate>
   );
 }
@@ -39,7 +41,7 @@ function Admin() {
 
   if (yetkili === false) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 text-center">
+      <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-3 px-4 text-center">
         <ShieldAlert className="size-6 text-muted-foreground/60" aria-hidden />
         <p className="text-sm text-muted-foreground">Bu sayfaya erişimin yok.</p>
       </main>
@@ -47,10 +49,9 @@ function Admin() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-5xl flex-col px-4 pb-10 pt-5 sm:px-6">
+    <main className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 pb-10 pt-5 sm:px-6">
       <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <AppNav />
           <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
             Yönetim
           </h1>

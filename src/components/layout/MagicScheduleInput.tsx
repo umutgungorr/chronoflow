@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Search, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -52,16 +52,22 @@ export function MagicScheduleInput() {
           void handleSubmit();
         }}
       >
-        <Input
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder={EXAMPLE}
-          aria-label="Gününü anlat, bloklara dağıtayım"
-          className="h-9 bg-canvas"
-        />
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder={EXAMPLE}
+            aria-label="Gününü anlat, bloklara dağıtayım"
+            className="h-10 rounded-xl bg-canvas pl-9"
+          />
+        </div>
         <Button
           type="submit"
-          className="h-9 shrink-0 gap-1.5 px-3"
+          className="h-10 shrink-0 gap-1.5 rounded-xl px-4"
           disabled={!text.trim() || busy}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
