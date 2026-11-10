@@ -1,35 +1,27 @@
 'use client';
 
 import { isToday } from 'date-fns';
+import { BarChart3, Disc, Plus, Settings, Zap } from 'lucide-react';
+import Link from 'next/link';
 
-import { useCurrentMinute } from '@/hooks/use-current-minute';
-import { DAY_END_MINUTE } from '@/lib/constants';
-import { formatDuration, getDurationMinutes, getStartMinutes } from '@/lib/time';
+import { useDayToolsStore } from '@/components/layout/DayToolsSheet';
+import { findFreeSlots, getAvailableDuration } from '@/lib/scheduler';
+import { formatDuration, getDurationMinutes, toDayMinutes } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useTaskStore, useTasksForSelectedDay } from '@/store/useTaskStore';
 import { CATEGORY_META, type TaskCategory } from '@/types';
 
-const SIZE = 200;
-const RADIUS = 84;
-const STROKE = 12;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const RING_SIZE = 116;
+const RING_RADIUS = 46;
+const RING_STROKE = 9;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-/** Dakika → kadran üzerindeki yay uzunluğu. */
-const arc = (minutes: number) => (minutes / DAY_END_MINUTE) * CIRCUMFERENCE;
+const FALLBACK_CATEGORIES: TaskCategory[] = ['WORK', 'SOCIAL', 'ROUTINE'];
 
-/**
- * Günün dairesel analizi.
- *
- * Klasik bir donut (kategorileri yığıp toplam gösteren) yerine bloklar
- * kadranda GERÇEK SAATLERİNDE çiziliyor: 00:00 tepede, gün saat yönünde
- * ilerliyor. Böylece halka aynı anda hem bir dağılım grafiği hem de günün
- * küçültülmüş haritası oluyor — boşluklar gerçekten boş saatler.
- * Zaman tünelindeki "şimdi" çizgisinin karşılığı da kadranda ibre olarak var.
- */
 type Props = {
   /**
-   * Panelden bir bloğa gidildiğinde çağrılır. Telefonda kadran alttan açılan
-   * bir panelde durduğu için, düzenleme penceresi açılırken o panelin
+   * Panelden bir bloğa veya işleme gidildiğinde çağrılır. Telefonda kadran alttan
+   * açılan bir panelde durduğu için, düzenleme penceresi açılırken o panelin
    * kapanması gerekiyor — yoksa modal panelin arkasında kalır.
    */
   onNavigate?: () => void;
@@ -37,212 +29,279 @@ type Props = {
 
 export function DailyStats({ onNavigate }: Props = {}) {
   const tasks = useTasksForSelectedDay();
+  const allTasks = useTaskStore((s) => s.tasks);
   const day = useTaskStore((s) => s.selectedDate);
-  const openEditEditor = useTaskStore((s) => s.openEditEditor);
-  const nowMinute = useCurrentMinute();
-  const showNeedle = nowMinute !== null && isToday(day);
+  const openCreateEditor = useTaskStore((s) => s.openCreateEditor);
+  const setDayToolsOpen = useDayToolsStore((s) => s.setOpen);
 
-  const planned = tasks
-    .filter((t) => t.category !== 'BUFFER')
-    .reduce((sum, t) => sum + getDurationMinutes(t), 0);
-  const completed = tasks.filter((t) => t.isCompleted).length;
+  const activeTasks = tasks.filter((t) => t.category !== 'BUFFER');
+  const completedCount = activeTasks.filter((t) => t.isCompleted).length;
+  const completionRate =
+    activeTasks.length > 0 ? Math.round((completedCount / activeTasks.length) * 100) : 0;
 
-  // Kategori kırılımı — yalnızca gerçekten kullanılanlar listelenir.
+  // Kategori kırılımı — kullanılanlar azalan sırayla; hiç blok yoksa örnek satırlar.
   const byCategory = tasks.reduce<Partial<Record<TaskCategory, number>>>((acc, task) => {
+    if (task.category === 'BUFFER') return acc;
     acc[task.category] = (acc[task.category] ?? 0) + getDurationMinutes(task);
     return acc;
   }, {});
+
   const breakdown = (Object.entries(byCategory) as [TaskCategory, number][]).sort(
     (a, b) => b[1] - a[1],
   );
 
+  const displayRows: [TaskCategory, number][] =
+    breakdown.length > 0
+      ? breakdown.slice(0, 4)
+      : FALLBACK_CATEGORIES.map((cat) => [cat, 0]);
+
+  const progressLength = (completionRate / 100) * RING_CIRCUMFERENCE;
+
+  const handleQuickAdd = () => {
+    const from = isToday(day) ? toDayMinutes(new Date()) : 9 * 60;
+    const slot =
+      findFreeSlots(allTasks, day, { from, minDuration: 30 })[0] ??
+      findFreeSlots(allTasks, day, { minDuration: 30 })[0];
+    const start = slot ? slot.start : from;
+    openCreateEditor(start, getAvailableDuration(allTasks, day, start, 60));
+    onNavigate?.();
+  };
+
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border bg-canvas/80 p-5 shadow-[0_0_40px_-20px_var(--primary)] backdrop-blur">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Günün dağılımı</h2>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {completed}/{tasks.length} bitti
-        </span>
-      </div>
-
-      <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
-        <svg
-          width={SIZE}
-          height={SIZE}
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          aria-hidden
-          style={{ filter: 'drop-shadow(0 0 8px rgb(46 230 184 / 0.18))' }}
-        >
-          {/* -90°: yay 3 yönünde değil, saat 12'de (00:00) başlasın. */}
-          <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={RADIUS}
-              fill="none"
-              stroke="var(--rule)"
-              strokeWidth={STROKE}
+    <div className="flex flex-col gap-3.5">
+      {/* 1. KART: Günlük Dağılım + Motivasyon */}
+      <section className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-[#0b1117]/90 p-5 shadow-[0_0_40px_-20px_var(--primary)] backdrop-blur">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Günlük Dağılım</h2>
+          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
+            <span
+              className="size-2 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]"
+              aria-hidden
             />
+            %{completionRate} tamamlandı
+          </span>
+        </div>
 
-            {tasks.map((task) => {
-              const meta = CATEGORY_META[task.category];
-              const length = arc(getDurationMinutes(task));
-              return (
+        <div className="flex items-center gap-5 py-1">
+          {/* Sol: Dairesel tamamlanma halkası */}
+          <div
+            className="relative shrink-0"
+            style={{ width: RING_SIZE, height: RING_SIZE }}
+          >
+            <svg
+              width={RING_SIZE}
+              height={RING_SIZE}
+              viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+              aria-hidden
+              style={{ filter: 'drop-shadow(0 0 10px rgba(46, 230, 184, 0.22))' }}
+            >
+              <g transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}>
                 <circle
-                  key={task.id}
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={RADIUS}
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
                   fill="none"
-                  stroke={meta.hex}
-                  strokeWidth={STROKE}
-                  strokeOpacity={task.category === 'BUFFER' ? 0.35 : task.isCompleted ? 0.45 : 1}
-                  // Yayı yerine oturtan iki değer: uzunluk ve başlangıç ofseti.
-                  strokeDasharray={`${length} ${CIRCUMFERENCE - length}`}
-                  strokeDashoffset={-arc(getStartMinutes(task))}
+                  stroke="rgba(255, 255, 255, 0.07)"
+                  strokeWidth={RING_STROKE}
                 />
+                {completionRate > 0 && (
+                  <circle
+                    cx={RING_SIZE / 2}
+                    cy={RING_SIZE / 2}
+                    r={RING_RADIUS}
+                    fill="none"
+                    stroke="var(--primary)"
+                    strokeWidth={RING_STROKE}
+                    strokeLinecap="round"
+                    strokeDasharray={`${progressLength} ${RING_CIRCUMFERENCE - progressLength}`}
+                    className="transition-all duration-500 ease-out"
+                  />
+                )}
+              </g>
+            </svg>
+
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="font-mono text-2xl font-bold leading-none text-foreground">
+                {completionRate}%
+              </span>
+              <span className="mt-1 text-[10px] text-muted-foreground">Tamamlandı</span>
+            </div>
+          </div>
+
+          {/* Sağ: Kategori kırılım listesi */}
+          <ul className="flex-1 space-y-2.5">
+            {displayRows.map(([category, minutes]) => {
+              const meta = CATEGORY_META[category];
+              return (
+                <li key={category} className="flex items-center gap-2 text-xs">
+                  <span
+                    className={cn('size-2 shrink-0 rounded-full', meta.bg)}
+                    aria-hidden
+                  />
+                  <span className="truncate text-muted-foreground">{meta.label}</span>
+                  <span className="ml-auto shrink-0 font-mono text-xs font-medium text-foreground">
+                    {formatDuration(minutes)}
+                  </span>
+                </li>
               );
             })}
-
-            {showNeedle && (
-              <circle
-                cx={SIZE / 2}
-                cy={SIZE / 2}
-                r={RADIUS}
-                fill="none"
-                stroke="var(--now)"
-                strokeWidth={STROKE + 6}
-                strokeDasharray={`2 ${CIRCUMFERENCE - 2}`}
-                strokeDashoffset={-arc(nowMinute)}
-              />
-            )}
-          </g>
-
-          {/* 00 / 06 / 12 / 18 çentikleri — kadranı okunur kılar. */}
-          {[0, 6, 12, 18].map((hour) => {
-            const angle = (hour / 24) * 2 * Math.PI - Math.PI / 2;
-            const outer = RADIUS + STROKE / 2 + 6;
-            const inner = RADIUS + STROKE / 2 + 2;
-            return (
-              <line
-                key={hour}
-                x1={SIZE / 2 + Math.cos(angle) * inner}
-                y1={SIZE / 2 + Math.sin(angle) * inner}
-                x2={SIZE / 2 + Math.cos(angle) * outer}
-                y2={SIZE / 2 + Math.sin(angle) * outer}
-                stroke="var(--tick)"
-                strokeWidth={1}
-              />
-            );
-          })}
-        </svg>
-
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-3xl font-semibold leading-none">
-            {formatDuration(planned)}
-          </span>
-          <span className="mt-1 text-[11px] text-muted-foreground">planlı</span>
+          </ul>
         </div>
-      </div>
 
-      {breakdown.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Henüz blok yok.
-        </p>
-      ) : (
-        <ul className="space-y-1">
-          {breakdown.map(([category, minutes]) => {
-            const meta = CATEGORY_META[category];
-            return (
-              <li key={category} className="flex items-center gap-2 text-xs">
-                <span
-                  className={cn(
-                    'size-2.5 shrink-0 rounded-[3px]',
-                    meta.bg,
-                    category === 'BUFFER' && meta.border,
-                  )}
-                  aria-hidden
-                />
-                <span className="truncate text-muted-foreground">{meta.label}</span>
-                <span className="ml-auto shrink-0 font-mono text-[11px]">
-                  {formatDuration(minutes)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+        {/* Alt Motivasyon / Durum Bandı */}
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/12 via-primary/5 to-transparent p-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary shadow-[0_0_16px_rgba(46,230,184,0.25)]"
+              aria-hidden
+            >
+              <Zap className="size-4 fill-primary/20" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">
+                {activeTasks.length === 0
+                  ? 'Günü planlamaya hazır mısın?'
+                  : completionRate >= 50
+                    ? 'Harika gidiyorsun!'
+                    : 'Adım adım ilerliyorsun!'}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {activeTasks.length === 0
+                  ? 'İlk bloğunu ekleyerek akışı başlat.'
+                  : `Bugünün planını %${completionRate} tamamladın.`}
+              </p>
+            </div>
+          </div>
 
-      {tasks.length > 0 && (
-        <div className="border-t pt-3">
-          <h3 className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-            Sıradaki
-          </h3>
-          <NextUp
-            onOpen={(id) => {
-              openEditEditor(id);
+          <svg
+            viewBox="0 0 48 28"
+            className="h-6 w-11 shrink-0 text-primary drop-shadow-[0_0_6px_rgba(46,230,184,0.45)]"
+            fill="none"
+            aria-hidden
+          >
+            <path
+              d="M3 23L15 15L24 19L43 5M43 5H34M43 5V14"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+      </section>
+
+      {/* 2. KART: Hızlı İşlemler */}
+      <section className="rounded-2xl border border-white/[0.07] bg-[#0b1117]/90 p-4 backdrop-blur">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Hızlı İşlemler</h2>
+          <button
+            type="button"
+            onClick={() => {
+              setDayToolsOpen(true);
               onNavigate?.();
             }}
-            nowMinute={showNeedle ? nowMinute : 0}
-            tasks={tasks}
-          />
+            className="text-[11px] text-muted-foreground transition-colors hover:text-primary"
+          >
+            Tümünü Gör →
+          </button>
         </div>
-      )}
-    </section>
-  );
-}
 
-type NextUpProps = {
-  tasks: ReturnType<typeof useTasksForSelectedDay>;
-  nowMinute: number;
-  onOpen: (id: string) => void;
-};
+        <div className="grid grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={handleQuickAdd}
+            className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1.5 py-3 text-center transition-all hover:border-primary/40 hover:bg-primary/10"
+          >
+            <Plus className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+            <span className="text-[10px] font-medium leading-tight text-muted-foreground group-hover:text-foreground">
+              Yeni Plan Oluştur
+            </span>
+          </button>
 
-/** Şu andan sonraki ilk iki blok — panelin "şimdi ne var?" cevabı. */
-function NextUp({ tasks, nowMinute, onOpen }: NextUpProps) {
-  // Tampon bloklar "sıradaki iş" değildir; listede yer kaplamasınlar.
-  const upcoming = tasks
-    .filter(
-      (task) =>
-        !task.isCompleted &&
-        task.category !== 'BUFFER' &&
-        getStartMinutes(task) >= nowMinute,
-    )
-    .slice(0, 2);
+          <Link
+            href="/hafta"
+            onClick={() => onNavigate?.()}
+            className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1.5 py-3 text-center transition-all hover:border-primary/40 hover:bg-primary/10"
+          >
+            <BarChart3 className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+            <span className="text-[10px] font-medium leading-tight text-muted-foreground group-hover:text-foreground">
+              Raporları Gör
+            </span>
+          </Link>
 
-  if (upcoming.length === 0) {
-    return <p className="text-xs text-muted-foreground">Bugün için başka blok yok.</p>;
-  }
+          <button
+            type="button"
+            onClick={() => {
+              setDayToolsOpen(true);
+              onNavigate?.();
+            }}
+            className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1.5 py-3 text-center transition-all hover:border-primary/40 hover:bg-primary/10"
+          >
+            <Settings className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+            <span className="text-[10px] font-medium leading-tight text-muted-foreground group-hover:text-foreground">
+              Ayarlar
+            </span>
+          </button>
 
-  return (
-    <ul className="space-y-1">
-      {upcoming.map((task) => {
-        const meta = CATEGORY_META[task.category];
-        const start = getStartMinutes(task);
-        return (
-          <li key={task.id}>
-            <button
-              type="button"
-              onClick={() => onOpen(task.id)}
-              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span
-                className={cn(
-                  'size-2.5 shrink-0 rounded-[3px]',
-                  meta.bg,
-                  task.category === 'BUFFER' && meta.border,
-                )}
-                aria-hidden
-              />
-              <span className="truncate">{task.title}</span>
-              <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
-                {String(Math.floor(start / 60)).padStart(2, '0')}:
-                {String(start % 60).padStart(2, '0')}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+          <Link
+            href="/odak"
+            onClick={() => onNavigate?.()}
+            className="group flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-1.5 py-3 text-center transition-all hover:border-primary/40 hover:bg-primary/10"
+          >
+            <Disc className="size-4 text-muted-foreground transition-colors group-hover:text-primary" />
+            <span className="text-[10px] font-medium leading-tight text-muted-foreground group-hover:text-foreground">
+              Odak Modu
+            </span>
+          </Link>
+        </div>
+      </section>
+
+      {/* 3. KART: Günün Sözü */}
+      <section className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0b1117]/90 p-5 backdrop-blur">
+        <div className="relative z-10 max-w-[220px]">
+          <p className="text-sm font-medium leading-snug text-foreground/95">
+            “Büyük hedefler,
+            <br />
+            iyi bir planla başlar.”
+          </p>
+          <p className="mt-2.5 text-[11px] text-muted-foreground">— ChronoFlow</p>
+        </div>
+
+        {/* Sağ alt turkuaz dalga dekorasyonu */}
+        <svg
+          viewBox="0 0 260 90"
+          className="pointer-events-none absolute bottom-0 right-0 h-20 w-48 opacity-85"
+          fill="none"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id="quoteWaveGrad" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(46, 230, 184, 0)" />
+              <stop offset="55%" stopColor="rgba(46, 230, 184, 0.22)" />
+              <stop offset="100%" stopColor="rgba(46, 230, 184, 0.7)" />
+            </linearGradient>
+            <linearGradient id="quoteWaveFill" x1="0.5" y1="0" x2="0.5" y2="1">
+              <stop offset="0%" stopColor="rgba(46, 230, 184, 0.18)" />
+              <stop offset="100%" stopColor="rgba(46, 230, 184, 0)" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M20 90 C 90 85, 140 25, 260 12 L 260 90 Z"
+            fill="url(#quoteWaveFill)"
+          />
+          <path
+            d="M20 90 C 90 85, 140 25, 260 12"
+            stroke="url(#quoteWaveGrad)"
+            strokeWidth="2"
+          />
+          <path
+            d="M70 90 C 130 82, 175 45, 260 32"
+            stroke="url(#quoteWaveGrad)"
+            strokeWidth="1.2"
+            strokeOpacity="0.55"
+          />
+        </svg>
+      </section>
+    </div>
   );
 }

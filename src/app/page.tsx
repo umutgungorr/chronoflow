@@ -48,7 +48,7 @@ function Planner() {
               özet bilgi başlıktaki planlı/tampon/boş satırında zaten var. */}
           <div className="flex min-h-0 flex-1 gap-4">
             <TimelineGrid />
-            <aside className="hidden w-72 shrink-0 overflow-y-auto lg:block">
+            <aside className="scrollbar-quiet hidden w-80 shrink-0 overflow-y-auto lg:block xl:w-[340px]">
               <DailyStats />
             </aside>
           </div>

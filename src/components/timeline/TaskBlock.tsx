@@ -1,7 +1,17 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Lock } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  Coffee,
+  Dumbbell,
+  Laptop,
+  Lock,
+  RefreshCw,
+  Users,
+  Zap,
+} from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
 import { applyDragPreview, type DragMode, type DragPreview } from '@/lib/layout';
@@ -13,13 +23,37 @@ import {
   minutesToY,
 } from '@/lib/time';
 import { cn } from '@/lib/utils';
-import { CATEGORY_META, type Task } from '@/types';
+import { CATEGORY_META, type Task, type TaskCategory } from '@/types';
 
 /** Tutamaç şeritlerinin yüksekliği (px). Dokunmatikte de yakalanabilir. */
 const HANDLE_PX = 7;
 
 /** Üst tutamağın gösterileceği en küçük blok süresi (dk). */
 const TOP_HANDLE_MIN_DURATION = 45;
+
+const CATEGORY_ICONS: Record<TaskCategory, typeof Laptop> = {
+  WORK: Laptop,
+  ROUTINE: Coffee,
+  HEALTH: Dumbbell,
+  URGENT: Zap,
+  SOCIAL: Users,
+  BUFFER: Clock,
+};
+
+function renderTaskIcon(task: Task) {
+  const lower = task.title.toLocaleLowerCase('tr-TR');
+  if (lower.includes('plan') || lower.includes('öncelik')) {
+    return <RefreshCw className="size-4 stroke-[2]" />;
+  }
+  if (lower.includes('öğle') || lower.includes('kahve') || lower.includes('mola')) {
+    return <Coffee className="size-4 stroke-[2]" />;
+  }
+  if (lower.includes('spor') || lower.includes('antrenman') || lower.includes('yürüyüş')) {
+    return <Dumbbell className="size-4 stroke-[2]" />;
+  }
+  const Icon = CATEGORY_ICONS[task.category] ?? Laptop;
+  return <Icon className="size-4 stroke-[2]" />;
+}
 
 type Props = {
   task: Task;
@@ -35,6 +69,7 @@ type Props = {
   /** Klavyeyle taşıma/boyutlandırma (ok tuşları). */
   onNudge: (id: string, mode: DragMode, deltaMinutes: number) => void;
   onDelete: (id: string) => void;
+  onToggleComplete?: (id: string) => void;
 };
 
 export function TaskBlock({
@@ -48,6 +83,7 @@ export function TaskBlock({
   onOpen,
   onNudge,
   onDelete,
+  onToggleComplete,
 }: Props) {
   const meta = CATEGORY_META[task.category];
   const isBuffer = task.category === 'BUFFER';
@@ -115,24 +151,30 @@ export function TaskBlock({
       onKeyDown={handleKeyDown}
       style={{
         top,
-        height: Math.max(height - 2, 16),
+        height: Math.max(height - 3, 20),
         left: `${lane * laneWidth}%`,
-        width: `calc(${laneWidth}% - 3px)`,
+        width: `calc(${laneWidth}% - 4px)`,
       }}
       className={cn(
-        'pointer-events-auto absolute flex flex-col overflow-hidden rounded-md text-left',
-        'transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
-        meta.surface,
-        meta.border,
-        isDragging ? 'z-40 shadow-lg ring-1 ring-foreground/20' : 'z-10 hover:shadow-sm',
-        isSelected && !isDragging && 'ring-2 ring-foreground ring-offset-1 ring-offset-canvas',
-        task.isCompleted && 'opacity-60',
+        'pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl border text-left backdrop-blur-sm transition-all',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
+        isBuffer
+          ? 'border-dashed border-white/10 bg-[#0d141b]/70'
+          : 'border-white/[0.08] bg-[#101820]/90 hover:border-white/[0.15] hover:bg-[#121c26]/95',
+        isDragging
+          ? 'z-40 shadow-[0_12px_32px_rgba(0,0,0,0.6)] ring-1 ring-primary/40'
+          : 'z-10 shadow-[0_4px_20px_rgba(0,0,0,0.28)]',
+        isSelected && !isDragging && 'ring-2 ring-primary/70',
       )}
     >
-      {/* Kategori şeridi — kimlik rengi burada tam doygunlukta görünür. */}
+      {/* Sol kenar parlak kategori/turkuaz vurgu şeridi */}
       {!isBuffer && (
         <span
-          className={cn('absolute inset-y-0 left-0 w-[3px]', meta.bg)}
+          className={cn(
+            'absolute inset-y-0 left-0 w-1 rounded-l-xl',
+            meta.bg,
+            'shadow-[0_0_12px_currentColor]',
+          )}
           aria-hidden
         />
       )}
@@ -157,38 +199,81 @@ export function TaskBlock({
         onClick={() => onSelect(task.id)}
         onDoubleClick={() => onOpen(task.id)}
         className={cn(
-          'flex min-h-0 flex-1 touch-none flex-col overflow-hidden pl-2.5 pr-2',
+          'flex min-h-0 flex-1 touch-none items-center justify-between gap-3 overflow-hidden pl-4 pr-3.5',
           isDragging ? 'cursor-grabbing' : 'cursor-grab',
-          isCompact ? 'justify-center' : 'justify-start pt-1',
-          !showTopHandle && !isCompact && 'pt-1.5',
         )}
       >
-        <span className="flex w-full items-center gap-1.5">
-          <span
-            className={cn(
-              'truncate text-[13px] font-medium leading-tight',
-              isBuffer && 'text-muted-foreground',
-              task.isCompleted && 'line-through decoration-1',
-            )}
-          >
-            {task.title}
-          </span>
-          {task.isFixed && (
-            <Lock className="size-3 shrink-0 text-muted-foreground" aria-label="Sabit" />
-          )}
-          {isCompact && !isDragging && (
-            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-              {formatDuration(duration)}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {!isCompact && (
+            <span
+              className={cn(
+                'flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.03] text-primary',
+                isBuffer && 'text-muted-foreground',
+              )}
+              aria-hidden
+            >
+              {renderTaskIcon(task)}
             </span>
           )}
-        </span>
 
-        {!isCompact && (
-          <span className="font-mono text-[10px] leading-tight text-muted-foreground">
-            {startLabel} – {endLabel}
-            <span className="mx-1 opacity-50">·</span>
-            {formatDuration(duration)}
-          </span>
+          <div className="flex min-w-0 flex-1 flex-col justify-center">
+            <span className="flex w-full items-center gap-1.5">
+              <span
+                className={cn(
+                  'truncate font-semibold leading-tight text-foreground',
+                  isCompact ? 'text-xs' : 'text-[13.5px]',
+                  isBuffer && 'font-normal text-muted-foreground',
+                )}
+              >
+                {task.title}
+              </span>
+              {task.isFixed && (
+                <Lock className="size-3 shrink-0 text-muted-foreground" aria-label="Sabit" />
+              )}
+              {isCompact && !isDragging && (
+                <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+                  {startLabel} – {endLabel}
+                </span>
+              )}
+            </span>
+
+            {!isCompact && (
+              <span className="mt-0.5 font-mono text-[11px] leading-tight text-muted-foreground">
+                {startLabel} – {endLabel}
+                {duration > 60 && (
+                  <>
+                    <span className="mx-1.5 opacity-40">·</span>
+                    <span>{formatDuration(duration)}</span>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Sağdaki yuvarlak tamamlandı düğmesi */}
+        {!isBuffer && onToggleComplete && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleComplete(task.id);
+            }}
+            aria-label={
+              task.isCompleted
+                ? `${task.title} tamamlandı işaretini kaldır`
+                : `${task.title} tamamlandı olarak işaretle`
+            }
+            className={cn(
+              'flex size-6 shrink-0 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              task.isCompleted
+                ? 'border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(46,230,184,0.3)]'
+                : 'border-white/20 bg-transparent text-transparent hover:border-primary/60 hover:text-primary/40',
+            )}
+          >
+            <Check className="size-3.5 stroke-[2.5]" />
+          </button>
         )}
       </div>
 
@@ -211,7 +296,7 @@ export function TaskBlock({
 
       {/* Sürüklerken canlı saat rozeti: hangi dakikaya yapıştığını söyler. */}
       {isDragging && (
-        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded bg-now px-1.5 py-0.5 font-mono text-[10px] leading-none text-now-contrast">
+        <span className="pointer-events-none absolute right-2 top-2 rounded-full bg-now px-2 py-0.5 font-mono text-[10px] font-bold leading-none text-now-contrast shadow-[0_0_8px_var(--now)]">
           {startLabel} – {endLabel}
         </span>
       )}

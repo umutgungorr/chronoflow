@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, PieChart, Plus } from 'lucide-react';
 
 import { DayTitle } from '@/components/layout/DayTitle';
 import { DayToolsSheet } from '@/components/layout/DayToolsSheet';
@@ -15,7 +15,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { DAY_END_MINUTE } from '@/lib/constants';
 import { findFreeSlots, getAvailableDuration } from '@/lib/scheduler';
 import {
   formatDayLabel,
@@ -34,23 +33,13 @@ export function AppHeader() {
   const goToToday = useTaskStore((s) => s.goToToday);
   const openCreateEditor = useTaskStore((s) => s.openCreateEditor);
 
-  /*
-   * Kadran geniş ekranda sağ panelde duruyor. Telefonda oraya yer yok ve
-   * ızgaranın altına koymak dikey alanı yer — 24 saatlik bir takvimde en
-   * kıymetli şey yükseklik. Bu yüzden alttan açılan panele koyuyoruz:
-   * özet satırına dokununca geliyor, kapanınca ızgara tüm alanı geri alıyor.
-   */
   const [ozetAcik, setOzetAcik] = useState(false);
 
   const plannedMinutes = tasks
     .filter((t) => t.category !== 'BUFFER')
     .reduce((sum, t) => sum + getDurationMinutes(t), 0);
-  const bufferMinutes = tasks
-    .filter((t) => t.category === 'BUFFER')
-    .reduce((sum, t) => sum + getDurationMinutes(t), 0);
-  const freeMinutes = DAY_END_MINUTE - plannedMinutes - bufferMinutes;
 
-  /** Klavye ile ekleme yolu: şu andan sonraki ilk uygun boşlukla pencereyi açar. */
+  /** İlk uygun boşlukla yeni blok penceresini açar. */
   const openEditorAtNextFreeSlot = () => {
     const from = isToday(day) ? toDayMinutes(new Date()) : 9 * 60;
     const slot =
@@ -61,84 +50,88 @@ export function AppHeader() {
   };
 
   return (
-    <header className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-1.5">
-        <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
-          {formatDayLabel(day)}
-        </h1>
-        <DayTitle />
-        <ViewTabs />
-        {/* Özet satırının kendisi düğme: telefonda dokununca kadranı açar.
-            Geniş ekranda kadran zaten sağda durduğu için tıklanamaz olur. */}
-        <button
-          type="button"
-          onClick={() => setOzetAcik(true)}
-          aria-label="Günün dağılımını göster"
-          className="flex items-center gap-1.5 rounded font-mono text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:pointer-events-none lg:hover:text-muted-foreground"
-        >
-          <span>
-            {formatDuration(plannedMinutes)} planlı
-            <span className="mx-1.5 opacity-40">·</span>
-            {formatDuration(bufferMinutes)} tampon
-            <span className="mx-1.5 opacity-40">·</span>
-            {formatDuration(freeMinutes)} boş
-          </span>
-          <PieChart className="size-3 shrink-0 opacity-70 lg:hidden" aria-hidden />
-        </button>
+    <header className="flex flex-col gap-2.5 pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-[#0b1117]/90 px-3.5 py-2.5 backdrop-blur">
+        {/* Sol grup: < > okları, takvim ikonu + tarih + Bugün rozeti */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center rounded-full border border-white/[0.08] bg-[#070c10] p-0.5">
+            <button
+              type="button"
+              onClick={goToPrevDay}
+              aria-label="Önceki gün"
+              className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={goToNextDay}
+              aria-label="Sonraki gün"
+              className="flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Calendar className="size-4 text-muted-foreground" aria-hidden />
+            <h1 className="text-base font-semibold tracking-tight sm:text-lg">
+              {formatDayLabel(day)}
+            </h1>
+            <ChevronRight className="size-3.5 text-muted-foreground/50" aria-hidden />
+          </div>
+
+          <button
+            type="button"
+            onClick={goToToday}
+            className="rounded-full border border-primary/30 bg-primary/15 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+          >
+            Bugün
+          </button>
+
+          <div className="hidden sm:block">
+            <DayTitle />
+          </div>
+        </div>
+
+        {/* Sağ grup: Görünüm sekmeleri + Blok ekle */}
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewTabs />
+
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 rounded-full px-3.5 text-xs shadow-[0_0_16px_-4px_var(--primary)]"
+            onClick={openEditorAtNextFreeSlot}
+          >
+            <Plus className="size-3.5" />
+            Blok ekle
+          </Button>
+
+          {/* Mobil özet tetikleyicisi */}
+          <button
+            type="button"
+            onClick={() => setOzetAcik(true)}
+            aria-label="Günün dağılımını göster"
+            className="flex items-center gap-1 rounded-full border border-white/[0.08] bg-[#070c10] px-2.5 py-1 font-mono text-[11px] text-muted-foreground lg:hidden"
+          >
+            <PieChart className="size-3 text-primary" aria-hidden />
+            {formatDuration(plannedMinutes)}
+          </button>
+        </div>
       </div>
+
+      <DayToolsSheet showTrigger={false} />
 
       <Sheet open={ozetAcik} onOpenChange={setOzetAcik}>
         <SheetContent side="bottom" className="max-h-[88vh] overflow-y-auto">
           <SheetHeader className="sr-only">
-            <SheetTitle>Günün dağılımı</SheetTitle>
+            <SheetTitle>Günlük dağılım</SheetTitle>
           </SheetHeader>
           <div className="mx-auto w-full max-w-sm pb-6">
             <DailyStats onNavigate={() => setOzetAcik(false)} />
           </div>
         </SheetContent>
       </Sheet>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <DayToolsSheet />
-        <div className="flex items-center rounded-md border bg-canvas">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-r-none"
-            onClick={goToPrevDay}
-            aria-label="Önceki gün"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 rounded-none border-x px-3 text-xs font-medium"
-            onClick={goToToday}
-            disabled={isToday(day)}
-          >
-            Bugün
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-l-none"
-            onClick={goToNextDay}
-            aria-label="Sonraki gün"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 px-3 text-xs"
-          onClick={openEditorAtNextFreeSlot}
-        >
-          <Plus className="size-3.5" />
-          Blok ekle
-        </Button>
-      </div>
     </header>
   );
 }

@@ -2,36 +2,39 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Calendar, CalendarDays, CalendarRange } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { href: '/', label: 'Gün' },
-  { href: '/hafta', label: 'Hafta' },
+  { href: '/', label: 'Gün', icon: Calendar },
+  { href: '/hafta', label: 'Hafta', icon: CalendarRange },
+  { href: '/hedefler', label: 'Hedefler', icon: CalendarDays },
 ] as const;
 
-/** Başlığın altındaki Gün | Hafta görünüm geçişi. */
+/** Üst bardaki Gün | Hafta | Hedefler görünüm seçicisi. */
 export function ViewTabs() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Görünüm" className="flex items-center gap-2 text-xs">
-      {TABS.map((tab, index) => {
-        const active = pathname === tab.href;
+    <nav aria-label="Görünüm" className="flex items-center gap-1.5 text-xs">
+      {TABS.map(({ href, label, icon: Icon }) => {
+        const active = pathname === href;
         return (
-          <span key={tab.href} className="flex items-center gap-2">
-            {index > 0 && <span className="text-muted-foreground/30" aria-hidden>|</span>}
-            <Link
-              href={tab.href}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                active ? 'font-medium text-primary' : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {tab.label}
-            </Link>
-          </span>
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              active
+                ? 'border border-primary/70 bg-primary/15 text-primary shadow-[0_0_16px_-4px_var(--primary)]'
+                : 'border border-transparent text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden />
+            {label}
+          </Link>
         );
       })}
     </nav>

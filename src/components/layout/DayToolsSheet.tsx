@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { create } from 'zustand';
 import { Bell, BellOff, CalendarCheck, LayoutTemplate, Loader2, Repeat, Trash2, Wand2 } from 'lucide-react';
 
 import { CategoryPicker } from '@/components/tasks/CategoryPicker';
@@ -32,18 +33,33 @@ function toTime(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+type ToolsStore = {
+  open: boolean;
+  setOpen: (open: boolean) => void;
+};
+
+export const useDayToolsStore = create<ToolsStore>((set) => ({
+  open: false,
+  setOpen: (open) => set({ open }),
+}));
+
 /** Şablonlar, rutinler, bildirimler ve gün değerlendirmesi tek çekmecede. */
-export function DayToolsSheet() {
+export function DayToolsSheet({ showTrigger = true }: { showTrigger?: boolean }) {
+  const open = useDayToolsStore((s) => s.open);
+  const setOpen = useDayToolsStore((s) => s.setOpen);
+
   return (
-    <Sheet>
-      <SheetTrigger
-        render={
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs">
-            <Wand2 className="size-3.5" />
-            Araçlar
-          </Button>
-        }
-      />
+    <Sheet open={open} onOpenChange={setOpen}>
+      {showTrigger && (
+        <SheetTrigger
+          render={
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full px-3 text-xs">
+              <Wand2 className="size-3.5" />
+              Araçlar
+            </Button>
+          }
+        />
+      )}
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Gün araçları</SheetTitle>

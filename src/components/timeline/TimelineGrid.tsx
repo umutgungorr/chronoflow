@@ -55,6 +55,7 @@ export function TimelineGrid() {
   const moveTask = useTaskStore((s) => s.moveTask);
   const resizeTask = useTaskStore((s) => s.resizeTask);
   const deleteTask = useTaskStore((s) => s.deleteTask);
+  const toggleComplete = useTaskStore((s) => s.toggleComplete);
 
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const nowMinute = useCurrentMinute();
@@ -227,7 +228,7 @@ export function TimelineGrid() {
                 sıradaki meşru tıklamayı yerdi. Sürüklemenin kendi artık tıklaması
                 öncesinde yeni bir mousedown olmadığı için o hâlâ yutuluyor. */}
             <div
-              className="pointer-events-none absolute inset-y-0 left-2 right-2 z-10"
+              className="pointer-events-none absolute inset-y-0 left-3 right-3 z-10"
               onMouseDownCapture={() => {
                 swallowNextClick.current = false;
               }}
@@ -245,6 +246,7 @@ export function TimelineGrid() {
                   onOpen={openEditEditor}
                   onNudge={commit}
                   onDelete={deleteTask}
+                  onToggleComplete={toggleComplete}
                 />
               ))}
             </div>

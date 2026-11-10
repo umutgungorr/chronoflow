@@ -22,17 +22,22 @@ export function NowIndicator({ minute, label }: Props) {
       aria-label={`Şu an ${label}`}
     >
       <div className="relative flex items-center">
-        {/* Cetvel sütununa taşan saat etiketi */}
+        {/* Cetvel sütununa taşan yuvarlak saat rozeti ve bağlantı çizgisi */}
         <span
-          className="absolute -translate-x-full pr-2 font-mono text-[10px] font-semibold leading-none"
+          className="absolute flex -translate-x-full items-center font-mono text-[10px] font-semibold leading-none"
           style={{ left: 0 }}
         >
-          <span className="inline-flex items-center gap-1 rounded-[3px] bg-now px-1.5 py-0.5 text-[10px] font-bold text-now-contrast shadow-[0_0_8px_var(--now)]">
-            <span className="size-1 rounded-full bg-current opacity-80" aria-hidden />
+          <span className="inline-flex items-center rounded-full bg-now px-2 py-0.5 text-[10px] font-bold text-now-contrast shadow-[0_0_12px_var(--now)]">
             {label}
           </span>
+          <span className="h-px w-2.5 bg-now shadow-[0_0_6px_var(--now)]" aria-hidden />
         </span>
-        <span className="h-px w-full bg-now shadow-[0_0_6px_var(--now)]" />
+        {/* Sol kenar dikey vurgu çentiği */}
+        <span
+          className="absolute -left-px h-3.5 w-[2px] rounded-full bg-now shadow-[0_0_8px_var(--now)]"
+          aria-hidden
+        />
+        <span className="h-px w-full bg-now/75 shadow-[0_0_6px_var(--now)]" />
       </div>
     </div>
   );
