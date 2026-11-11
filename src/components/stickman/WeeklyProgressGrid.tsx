@@ -137,7 +137,7 @@ export function WeeklyProgressGrid({ selectedDate, onSelectDay }: Props) {
           </div>
           <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-primary/50 via-primary to-[#5eead4] shadow-[0_0_12px_var(--primary)] transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-gradient-to-r from-primary/50 via-primary to-[#5eead4] shadow-[0_0_12px_var(--primary)] transition-all duration-1000 ease-out"
               style={{ width: `${weeklyRate}%` }}
             />
           </div>
@@ -208,23 +208,31 @@ export function WeeklyProgressGrid({ selectedDate, onSelectDay }: Props) {
                 )}
               </div>
 
-              {/* Günün Başarı Rozeti */}
-              <div className="my-2 flex items-center justify-between">
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {d.completed}/{d.total}
-                </span>
-                <span
-                  className={cn(
-                    'font-mono text-[10px] font-bold',
-                    d.rate === 100
-                      ? 'text-primary'
-                      : d.rate > 0
-                        ? 'text-foreground'
-                        : 'text-muted-foreground/60',
-                  )}
-                >
-                  %{d.rate}
-                </span>
+              {/* Günün Başarı Rozeti & Yavaş Dolum Barı */}
+              <div className="my-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {d.completed}/{d.total}
+                  </span>
+                  <span
+                    className={cn(
+                      'font-mono text-[10px] font-bold transition-colors duration-500',
+                      d.rate === 100
+                        ? 'text-primary'
+                        : d.rate > 0
+                          ? 'text-foreground'
+                          : 'text-muted-foreground/60',
+                    )}
+                  >
+                    %{d.rate}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-primary shadow-[0_0_8px_var(--primary)] transition-all duration-1000 ease-out"
+                    style={{ width: `${d.rate}%` }}
+                  />
+                </div>
               </div>
 
               {/* Hedef Kutucukları (Grid Boxes) */}
