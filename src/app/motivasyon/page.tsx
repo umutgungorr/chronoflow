@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { addWeeks } from 'date-fns';
 import {
   Calendar,
   ChevronLeft,
@@ -13,8 +14,8 @@ import { AuthGate } from '@/components/auth/AuthGate';
 import { AppShell } from '@/components/layout/AppShell';
 import { FlowToast } from '@/components/layout/FlowToast';
 import { SyncBridge } from '@/components/layout/SyncStatus';
-import { ProgressBoxes } from '@/components/stickman/ProgressBoxes';
-import { StickmanFigure } from '@/components/stickman/StickmanFigure';
+import { Stickman3D } from '@/components/stickman/Stickman3D';
+import { WeeklyProgressGrid } from '@/components/stickman/WeeklyProgressGrid';
 import { useCurrentMinute } from '@/hooks/use-current-minute';
 import { useDayRollover } from '@/hooks/use-day-rollover';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
@@ -24,11 +25,11 @@ import { dayKey, formatDayLabel } from '@/lib/time';
 import { useTasksForSelectedDay, useTaskStore } from '@/store/useTaskStore';
 
 const MOTIVATION_QUOTES = [
-  '“Disiplin, ne istediğin ile şu an ne istediğin arasındaki tercihtir.”',
-  '“Büyük işler, bir dizi küçük işin bir araya gelmesiyle başarılır.” — Vincent Van Gogh',
-  '“Bugün yapacağın küçük bir ilerleme, yarınki büyük zaferin temelidir.”',
-  '“Zamanını planlayan, geleceğini yönetir.”',
-  '“Başlamak için mükemmel olmak zorunda değilsin, ama mükemmel olmak için başlamak zorundasın.”',
+  '“Büyük hedefler küçük adımlarla başlar; her kutucuk seni zirveye taşır.”',
+  '“Haftalık planını koruyan, geleceğini şansa bırakmaz.”',
+  '“Disiplin, motivasyonun bittiği yerde hedefe ulaştıran tek güçtür.”',
+  '“Bugün doldurduğun her kutucuk, yarınki başarın için bir tuğladır.”',
+  '“Başlamak cesaret, devam etmek alışkanlık, tamamlamak ise ustalıktır.”',
 ];
 
 export default function MotivasyonPage() {
@@ -49,8 +50,7 @@ function MotivationWorkspace() {
   useCurrentMinute();
 
   const selectedDate = useTaskStore((s) => s.selectedDate);
-  const goToPrevDay = useTaskStore((s) => s.goToPrevDay);
-  const goToNextDay = useTaskStore((s) => s.goToNextDay);
+  const setSelectedDate = useTaskStore((s) => s.setSelectedDate);
   const goToToday = useTaskStore((s) => s.goToToday);
 
   const tasks = useTasksForSelectedDay();
@@ -73,13 +73,21 @@ function MotivationWorkspace() {
     setQuoteIdx((prev) => (prev + 1) % MOTIVATION_QUOTES.length);
   };
 
+  const prevWeek = () => {
+    setSelectedDate(addWeeks(selectedDate, -1));
+  };
+
+  const nextWeek = () => {
+    setSelectedDate(addWeeks(selectedDate, 1));
+  };
+
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 pb-12 pt-6 sm:px-6">
+    <main className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-4 pb-12 pt-6 sm:px-6">
       {hydrated ? (
         <>
           <SyncBridge />
 
-          {/* Üst Başlık & Tarih Gezintisi */}
+          {/* Üst Başlık & Hafta Gezinmesi */}
           <header className="mb-6 flex flex-col gap-4 border-b border-white/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -87,20 +95,20 @@ function MotivationWorkspace() {
                   🕶️
                 </span>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                  Motivasyon & Stickman
+                  3D Stickman & Haftalık Gidişat
                 </h1>
               </div>
               <p className="text-xs text-muted-foreground sm:text-sm">
-                Hedeflerini tamamla, stickman seviye atlasın ve güneş gözlüğünü taksın!
+                Haftalık kutucukları tamamla, gidişatını takip et ve 3D Stickman havalı güneş gözlüğünü taksın!
               </p>
             </div>
 
-            {/* Gün Değiştirme */}
-            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0b1117]/90 p-1 backdrop-blur">
+            {/* Hafta / Gün Seçici Kapsül */}
+            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0b1117]/90 p-1.5 backdrop-blur">
               <button
                 type="button"
-                onClick={goToPrevDay}
-                aria-label="Önceki gün"
+                onClick={prevWeek}
+                title="Önceki Hafta"
                 className="flex size-7 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               >
                 <ChevronLeft className="size-4" />
@@ -113,8 +121,8 @@ function MotivationWorkspace() {
 
               <button
                 type="button"
-                onClick={goToNextDay}
-                aria-label="Sonraki gün"
+                onClick={nextWeek}
+                title="Sonraki Hafta"
                 className="flex size-7 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
               >
                 <ChevronRight className="size-4" />
@@ -123,46 +131,46 @@ function MotivationWorkspace() {
               <button
                 type="button"
                 onClick={goToToday}
-                className="rounded-xl border border-primary/30 bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+                className="rounded-xl border border-primary/30 bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/25"
               >
                 Bugün
               </button>
             </div>
           </header>
 
-          {/* İKİ KOLONLU DÜZEN: SOLDA STICKMAN, SAĞDA İLERLEME KUTULARI */}
+          {/* İKİ KOLONLU ANA YAPI: SOLDA 3D STICKMAN, SAĞDA HAFTALIK GİDİŞAT KUTUCUKLARI */}
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-            {/* SOL: STICKMAN MERKEZİ (5 Kolon) */}
+            {/* SOL KOLON: 3D STICKMAN (5 Kolon) */}
             <div className="flex flex-col gap-5 lg:col-span-5">
-              <div className="flex flex-col items-center rounded-3xl border border-white/[0.08] bg-[#0b1117]/90 p-6 shadow-xl backdrop-blur">
-                <StickmanFigure
+              <div className="flex flex-col items-center rounded-3xl border border-white/[0.08] bg-[#0b1117]/90 p-5 shadow-2xl backdrop-blur">
+                <Stickman3D
                   percent={percent}
                   totalGoals={totalCount}
                   completedGoals={completedCount}
                 />
 
-                {/* İlerleme Durum Kartı */}
-                <div className="mt-5 w-full rounded-2xl border border-white/[0.06] bg-[#070c10] p-4 text-center">
-                  <div className="flex items-center justify-center gap-2 font-mono text-lg font-bold text-foreground">
+                {/* Günün Durumu */}
+                <div className="mt-4 w-full rounded-2xl border border-white/[0.06] bg-[#070c10] p-3.5 text-center">
+                  <div className="flex items-center justify-center gap-2 font-mono text-base font-bold text-foreground">
                     <span>{completedCount} / {totalCount}</span>
-                    <span className="text-primary">Hedef Bitti</span>
+                    <span className="text-primary font-sans">Hedef Tamamlandı</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {totalCount === 0
-                      ? 'Bugün için plan sayfasına gidip hedef ekleyebilirsin.'
+                      ? 'Bugün için plan sayfasına gidip hedef veya blok ekleyebilirsin.'
                       : percent === 100
-                        ? 'Tebrikler! Stickman tüm hedefler bittiği için havalı gözlüğünü taktı! 😎'
-                        : `Gözlüğü takmaya ${totalCount - completedCount} hedef kaldı!`}
+                        ? 'Tebrikler! Bugünün hedefleri tamamlandı, 3D Stickman gözlüğü taktı! 😎'
+                        : `Gözlüğün takılmasına son ${totalCount - completedCount} hedef kaldı!`}
                   </p>
                 </div>
               </div>
 
-              {/* Motivasyon Sözü Kartı */}
-              <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0b1117]/90 p-5 shadow-lg backdrop-blur">
+              {/* Motivasyon Sözü */}
+              <div className="rounded-2xl border border-white/[0.08] bg-[#0b1117]/90 p-4 shadow-lg backdrop-blur">
                 <div className="flex items-center justify-between pb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
                     <Sparkles className="size-3.5" />
-                    <span>GÜNÜN MOTİVASYONU</span>
+                    <span>HAFTALIK MOTİVASYON</span>
                   </div>
                   <button
                     type="button"
@@ -179,12 +187,11 @@ function MotivationWorkspace() {
               </div>
             </div>
 
-            {/* SAĞ: KUTUCUKLAR İLE İLERLEME & METRİKLER (7 Kolon) */}
+            {/* SAĞ KOLON: HAFTALIK GİDİŞAT VE GÜNLÜK KUTUCUKLAR (7 Kolon) */}
             <div className="flex flex-col gap-5 lg:col-span-7">
-              <ProgressBoxes
-                percent={percent}
-                completedCount={completedCount}
-                totalCount={totalCount}
+              <WeeklyProgressGrid
+                selectedDate={selectedDate}
+                onSelectDay={(day) => setSelectedDate(day)}
               />
             </div>
           </div>
