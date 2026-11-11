@@ -1,112 +1,194 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Target } from 'lucide-react';
+import { isToday } from 'date-fns';
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Target,
+} from 'lucide-react';
 
 import { AuthGate } from '@/components/auth/AuthGate';
-import { AppShell } from '@/components/layout/AppShell';
+import { DailyGoalsBox } from '@/components/goals/DailyGoalsBox';
+import { FixActivitiesBox } from '@/components/goals/FixActivitiesBox';
 import { GoalCard } from '@/components/goals/GoalCard';
 import { GoalModal, type GoalEditorState } from '@/components/goals/GoalModal';
+import { AppShell } from '@/components/layout/AppShell';
 import { FlowToast } from '@/components/layout/FlowToast';
 import { SyncBridge } from '@/components/layout/SyncStatus';
-import { Button } from '@/components/ui/button';
 import { useCurrentMinute } from '@/hooks/use-current-minute';
 import { useDayRollover } from '@/hooks/use-day-rollover';
 import { useHydratedStore } from '@/hooks/use-hydrated-store';
 import { useUndoShortcut } from '@/hooks/use-undo-shortcut';
 import { useVisitLog } from '@/hooks/use-visit-log';
 import { sortGoals } from '@/lib/goals';
+import { formatDayLabel } from '@/lib/time';
 import { useTaskStore } from '@/store/useTaskStore';
 
 export default function HedeflerPage() {
   return (
     <AuthGate>
       <AppShell>
-        <Goals />
+        <GoalsWorkspace />
       </AppShell>
     </AuthGate>
   );
 }
 
-function Goals() {
+function GoalsWorkspace() {
   const hydrated = useHydratedStore();
   useUndoShortcut();
   useDayRollover();
   useVisitLog();
+  useCurrentMinute();
 
-  const goals = useTaskStore((s) => s.goals);
+  const selectedDate = useTaskStore((s) => s.selectedDate);
+  const goToPrevDay = useTaskStore((s) => s.goToPrevDay);
+  const goToNextDay = useTaskStore((s) => s.goToNextDay);
+  const goToToday = useTaskStore((s) => s.goToToday);
+
+  const goals = useTaskStore((s) => s.goals ?? []);
   const deleteGoal = useTaskStore((s) => s.deleteGoal);
   const addGoalBlock = useTaskStore((s) => s.addGoalBlock);
-  const [editor, setEditor] = useState<GoalEditorState>(null);
 
-  // Sayfa açık dururken gün değişirse geri sayım kendini güncellesin.
-  // Değeri kullanmıyoruz; yalnızca dakikada bir yeniden render tetikliyor.
-  useCurrentMinute();
+  const [editor, setEditor] = useState<GoalEditorState>(null);
+  const [showLongTerm, setShowLongTerm] = useState(false);
+
   const now = new Date();
+  const isSelectedToday = isToday(selectedDate);
 
   return (
-    <main className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 pb-10 pt-5 sm:px-6">
+    <main className="mx-auto flex min-h-full w-full max-w-6xl flex-col px-4 pb-12 pt-6 sm:px-6">
       {hydrated ? (
         <>
           <SyncBridge />
 
-          <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
+          {/* Notion Tarzı Temiz Üst Başlık & Kontrol Çubuğu */}
+          <header className="mb-6 flex flex-col gap-4 border-b border-white/[0.07] pb-5 sm:flex-row sm:items-end sm:justify-between">
             <div className="space-y-1.5">
-              <h1 className="text-[clamp(1.5rem,4vw,2rem)] font-semibold leading-none tracking-[-0.03em]">
-                Hedefler
-              </h1>
-              <p className="font-mono text-xs text-muted-foreground">
-                {goals.length === 0
-                  ? 'henüz hedef yok'
-                  : `${goals.length} hedef · en yakını üstte`}
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" role="img" aria-label="Target">
+                  🎯
+                </span>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  Hedefler & Rutinler
+                </h1>
+              </div>
+              <p className="text-xs text-muted-foreground sm:text-sm">
+                Notion tarzı günlük hedeflerini gir, tikle ve fix aktivitelerini ayrı ayrı yönet.
               </p>
             </div>
 
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 px-3 text-xs"
-              onClick={() => setEditor({ mode: 'create' })}
-            >
-              <Plus className="size-3.5" />
-              Hedef ekle
-            </Button>
+            {/* Gün Değiştirme / Bugün Seçici Kapsülü */}
+            <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#0b1117]/90 p-1 backdrop-blur">
+              <button
+                type="button"
+                onClick={goToPrevDay}
+                aria-label="Önceki gün"
+                className="flex size-7 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+
+              <div className="flex items-center gap-1.5 px-2 text-xs font-semibold text-foreground">
+                <Calendar className="size-3.5 text-primary" />
+                <span>{formatDayLabel(selectedDate)}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={goToNextDay}
+                aria-label="Sonraki gün"
+                className="flex size-7 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+              >
+                <ChevronRight className="size-4" />
+              </button>
+
+              {!isSelectedToday && (
+                <button
+                  type="button"
+                  onClick={goToToday}
+                  className="rounded-xl border border-primary/30 bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+                >
+                  Bugün
+                </button>
+              )}
+            </div>
           </header>
 
-          {goals.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-20 text-center">
-              <Target className="size-6 text-muted-foreground/50" aria-hidden />
-              <p className="text-sm text-muted-foreground">
-                Bir tarih koy, kalan süreyi burada takip et.
-              </p>
-              <Button variant="outline" size="sm" onClick={() => setEditor({ mode: 'create' })}>
-                İlk hedefini ekle
-              </Button>
-            </div>
-          ) : (
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {sortGoals(goals, now).map((goal) => (
-                <GoalCard
-                  key={goal.id}
-                  goal={goal}
-                  now={now}
-                  onEdit={(g) => setEditor({ mode: 'edit', goal: g })}
-                  onDelete={deleteGoal}
-                  onSchedule={(g) => addGoalBlock(g.title)}
+          {/* 2 FARKLI KUTUCUK (Yan yana 2 Kolonlu Notion Alanı) */}
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+            {/* 1. KUTU: GÜNLÜK HEDEFLER (Notion To-Do Checklist) */}
+            <DailyGoalsBox />
+
+            {/* 2. KUTU: FİX AKTİVİTELER (Sabit Alışkanlıklar & Rutinler) */}
+            <FixActivitiesBox />
+          </div>
+
+          {/* Uzun Vadeli Geri Sayım Hedefleri (Notion Tarzı İsteğe Bağlı Akordiyon) */}
+          <div className="mt-8 rounded-2xl border border-white/[0.06] bg-[#0b1117]/60 p-4 backdrop-blur">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowLongTerm(!showLongTerm)}
+                className="flex items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Target className="size-4 text-primary/70" />
+                <span>Uzun Vadeli Hedefler & Geri Sayımlar ({goals.length})</span>
+                <ChevronDown
+                  className={`size-3.5 transition-transform duration-200 ${
+                    showLongTerm ? 'rotate-180' : ''
+                  }`}
                 />
-              ))}
-            </ul>
-          )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEditor({ mode: 'create' })}
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <Plus className="size-3.5" />
+                Yeni Uzun Vadeli Hedef
+              </button>
+            </div>
+
+            {showLongTerm && (
+              <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                {goals.length === 0 ? (
+                  <p className="text-center py-6 text-xs text-muted-foreground">
+                    Kayıtlı uzun vadeli hedef bulunmuyor.
+                  </p>
+                ) : (
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {sortGoals(goals, now).map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        now={now}
+                        onEdit={(g) => setEditor({ mode: 'edit', goal: g })}
+                        onDelete={deleteGoal}
+                        onSchedule={(g) => addGoalBlock(g.title)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
 
           <GoalModal editor={editor} onClose={() => setEditor(null)} />
           <FlowToast />
         </>
       ) : (
-        <div className="space-y-3 pt-5">
-          <div className="h-2.5 w-24 rounded bg-muted" />
-          <div className="h-7 w-40 rounded bg-muted" />
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="h-40 rounded-xl border bg-canvas" />
-            <div className="h-40 rounded-xl border bg-canvas" />
+        <div className="space-y-4 pt-6">
+          <div className="h-8 w-64 rounded-xl bg-muted/60" />
+          <div className="h-4 w-96 rounded-lg bg-muted/40" />
+          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="h-80 rounded-2xl border border-white/[0.08] bg-[#0b1117]" />
+            <div className="h-80 rounded-2xl border border-white/[0.08] bg-[#0b1117]" />
           </div>
         </div>
       )}

@@ -30,17 +30,18 @@ import {
   snapMinutes,
   toDayMinutes,
 } from '@/lib/time';
-import type { Goal } from '@/lib/goals';
+import type { DailyGoal, Goal } from '@/lib/goals';
 import type { Subtask } from '@/lib/focus';
 import {
   DAY_TEMPLATES,
+  placeBlocks,
   planRoutinesIntoDay,
   planTemplateIntoDay,
   type Routine,
   type RoutineInput,
 } from '@/lib/routines';
 import type { ScheduleItem } from '@/lib/magic-schedule';
-import type { ScheduleResult, Task, TaskInput } from '@/types';
+import type { ScheduleResult, Task, TaskCategory, TaskInput } from '@/types';
 
 /* -------------------------------------------------------------------------- */
 /*  Store tipi                                                                */
@@ -80,6 +81,8 @@ type TaskState = {
   dayTitles: Record<string, string>;
   /** Hedefler — ayrı sayfadaki geri sayımlar. */
   goals: Goal[];
+  /** Günlük hedefler ve to-do öğeleri (Notion tarzı). */
+  dailyGoals: DailyGoal[];
   /**
    * Uygulamanın "bugün" olarak bildiği gün ('YYYY-MM-DD').
    * Gece yarısını geçtiğimizi anlamak için tutuluyor; kalıcı DEĞİL.
@@ -96,10 +99,12 @@ type TaskState = {
    * Supabase ile senkronlanmaz (şemada karşılığı yok).
    */
   subtasks: Record<string, Subtask[]>;
-  /** Tekrarlayan blok kuralları. Yerel. */
+  /** Tekrarlayan blok kuralları (Fix aktiviteler). Yerel. */
   routines: Routine[];
   /** Hangi güne hangi rutinler işlendi (dayKey → rutin id'leri). Yerel. */
   routineApplied: Record<string, string[]>;
+  /** Rutinlerin tamamlanma kayıtları (dayKey → routineId[]). */
+  routineCompleted: Record<string, string[]>;
 };
 
 /** Geçmişteki bir kare: o andaki plan + ne yapıldığının adı. */
@@ -152,6 +157,18 @@ type TaskActions = {
   updateGoal: (id: string, patch: Partial<Omit<Goal, 'id'>>) => void;
   deleteGoal: (id: string) => void;
 
+  /* — Günlük Hedefler (Notion Tarzı) — */
+  addDailyGoal: (input: {
+    title: string;
+    category?: TaskCategory;
+    date?: string;
+    priority?: 'high' | 'medium' | 'low';
+  }) => string;
+  toggleDailyGoal: (id: string) => void;
+  updateDailyGoal: (id: string, patch: Partial<DailyGoal>) => void;
+  deleteDailyGoal: (id: string) => void;
+  addDailyGoalToTimeline: (id: string) => boolean;
+
   /* — Gün devri — */
   /**
    * Gece yarısı geçtiyse ve kullanıcı hâlâ eski "bugün"e bakıyorsa
@@ -167,9 +184,12 @@ type TaskActions = {
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   deleteSubtask: (taskId: string, subtaskId: string) => void;
 
-  /* — Rutinler ve şablonlar — */
+  /* — Rutinler ve şablonlar (Fix Aktiviteler) — */
   addRoutine: (input: RoutineInput) => void;
+  updateRoutine: (id: string, patch: Partial<Omit<Routine, 'id'>>) => void;
   deleteRoutine: (id: string) => void;
+  toggleRoutineCompleted: (routineId: string, dateKey?: string) => void;
+  addRoutineToTimeline: (routineId: string, day: Date) => boolean;
   /** O gün için henüz işlenmemiş rutinleri boş yerlere koyar. Geçmiş güne dokunmaz. */
   applyRoutinesToDay: (day: Date) => number;
   applyTemplate: (templateId: string) => { placed: number; skipped: number };
@@ -261,11 +281,13 @@ export const useTaskStore = create<TaskStore>()(
       feedback: null,
       dayTitles: {},
       goals: [],
+      dailyGoals: [],
       lastKnownToday: dayKey(new Date()),
       history: [],
       subtasks: {},
       routines: [],
       routineApplied: {},
+      routineCompleted: {},
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
@@ -541,6 +563,52 @@ export const useTaskStore = create<TaskStore>()(
         })),
 
       /* ---------------------------------------------------------------- */
+      addDailyGoal: (input) => {
+        const clean = input.title.trim().slice(0, 150);
+        if (!clean) return '';
+        const id = createId();
+        const currentDay = input.date ?? dayKey(get().selectedDate);
+        const newGoal: DailyGoal = {
+          id,
+          title: clean,
+          isCompleted: false,
+          date: currentDay,
+          category: input.category ?? 'WORK',
+          priority: input.priority ?? 'medium',
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({
+          dailyGoals: [newGoal, ...(s.dailyGoals ?? [])],
+        }));
+        return id;
+      },
+
+      toggleDailyGoal: (id) =>
+        set((s) => ({
+          dailyGoals: (s.dailyGoals ?? []).map((g) =>
+            g.id === id ? { ...g, isCompleted: !g.isCompleted } : g,
+          ),
+        })),
+
+      updateDailyGoal: (id, patch) =>
+        set((s) => ({
+          dailyGoals: (s.dailyGoals ?? []).map((g) =>
+            g.id === id ? { ...g, ...patch } : g,
+          ),
+        })),
+
+      deleteDailyGoal: (id) =>
+        set((s) => ({
+          dailyGoals: (s.dailyGoals ?? []).filter((g) => g.id !== id),
+        })),
+
+      addDailyGoalToTimeline: (id) => {
+        const goal = (get().dailyGoals ?? []).find((g) => g.id === id);
+        if (!goal) return false;
+        return get().addGoalBlock(goal.title);
+      },
+
+      /* ---------------------------------------------------------------- */
       rolloverToToday: (now) => {
         const bugun = dayKey(now);
         const { lastKnownToday, selectedDate } = get();
@@ -591,8 +659,62 @@ export const useTaskStore = create<TaskStore>()(
       addRoutine: (input) =>
         set((s) => ({ routines: [...s.routines, { ...input, id: createId() }] })),
 
+      updateRoutine: (id, patch) =>
+        set((s) => ({
+          routines: s.routines.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+        })),
+
       deleteRoutine: (id) =>
         set((s) => ({ routines: s.routines.filter((r) => r.id !== id) })),
+
+      toggleRoutineCompleted: (routineId, dateKeyParam) => {
+        const key = dateKeyParam ?? dayKey(get().selectedDate);
+        set((s) => {
+          const list = s.routineCompleted?.[key] ?? [];
+          const exists = list.includes(routineId);
+          const next = exists ? list.filter((id) => id !== routineId) : [...list, routineId];
+          return {
+            routineCompleted: {
+              ...(s.routineCompleted ?? {}),
+              [key]: next,
+            },
+          };
+        });
+      },
+
+      addRoutineToTimeline: (routineId, day) => {
+        const routine = get().routines.find((r) => r.id === routineId);
+        if (!routine) return false;
+        const { created } = placeBlocks(
+          get().tasks,
+          day,
+          [
+            {
+              title: routine.title,
+              category: routine.category,
+              start: routine.start,
+              duration: routine.duration,
+              isFixed: routine.isFixed,
+            },
+          ],
+          createId,
+        );
+        if (created.length > 0) {
+          set((s) => ({
+            ...snapshot(s, `${routine.title} güne eklendi`),
+            tasks: [...s.tasks, ...created],
+            feedback: { message: `"${routine.title}" takvime eklendi`, tone: 'info' },
+          }));
+          return true;
+        }
+        set({
+          feedback: {
+            message: `"${routine.title}" için seçilen saatte çakışma var`,
+            tone: 'warning',
+          },
+        });
+        return false;
+      },
 
       applyRoutinesToDay: (day) => {
         const state = get();
@@ -707,6 +829,8 @@ export const useTaskStore = create<TaskStore>()(
         tasks: state.tasks,
         dayTitles: state.dayTitles,
         goals: state.goals,
+        dailyGoals: state.dailyGoals,
+        routineCompleted: state.routineCompleted,
         subtasks: state.subtasks,
         routines: state.routines,
         routineApplied: state.routineApplied,

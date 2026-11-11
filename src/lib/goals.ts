@@ -1,11 +1,23 @@
 import { differenceInCalendarDays, isValid, parse } from 'date-fns';
+import type { TaskCategory } from '@/types';
 
 /**
- * Hedefler — geri sayım matematiği.
+ * Hedefler — geri sayım matematiği ve günlük hedefler.
  *
  * Saf ve tarihten bağımsız: "şimdi"yi parametre olarak alıyor ki test
  * edilebilsin ve gece yarısı geçerken kırılmasın.
  */
+
+export type DailyGoal = {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+  /** 'YYYY-MM-DD' — hedefin ait olduğu gün. */
+  date: string;
+  category: TaskCategory;
+  priority?: 'high' | 'medium' | 'low';
+  createdAt: string;
+};
 
 export type Goal = {
   id: string;
