@@ -8,6 +8,9 @@ type Props = {
   percent: number;
   totalGoals: number;
   completedGoals: number;
+  /** Ardışık başarılı gün sayısı: 3+ alev aurası, 7+ taç. */
+  streak?: number;
+  level?: number;
 };
 
 type Vec3 = { x: number; y: number; z: number };
@@ -28,8 +31,12 @@ function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
 }
 
-export function Stickman3D({ percent, totalGoals, completedGoals }: Props) {
+export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, level = 1 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streakRef = useRef(streak);
+  useEffect(() => {
+    streakRef.current = streak;
+  }, [streak]);
   const [bounce, setBounce] = useState(false);
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [displayedPercent, setDisplayedPercent] = useState(percent);
@@ -376,25 +383,73 @@ export function Stickman3D({ percent, totalGoals, completedGoals }: Props) {
         z: posZ + legStride,
       };
 
-      // Gövde ve Uzuv Çizimi
-      drawBone3D(neck, pelvis, 7, boneColor, width, height, breathRotX, breathRotY, glowBlur);
+      // Seri (streak) aurası: 3+ gün turuncu alev ışıması, 7+ gün daha güçlü
+      if (streakRef.current >= 3) {
+        const auraProj = project({ x: posX, y: 20, z: posZ + 20 }, width, height, breathRotX, breathRotY);
+        const flicker = 0.85 + Math.sin(time * 9) * 0.08 + Math.sin(time * 5.3) * 0.07;
+        const auraR = (streakRef.current >= 7 ? 120 : 95) * auraProj.scale * flicker;
+        const aura = ctx.createRadialGradient(auraProj.x, auraProj.y, 8, auraProj.x, auraProj.y, auraR);
+        aura.addColorStop(0, streakRef.current >= 7 ? 'rgba(251,191,36,0.34)' : 'rgba(251,146,60,0.28)');
+        aura.addColorStop(0.55, 'rgba(249,115,22,0.12)');
+        aura.addColorStop(1, 'rgba(249,115,22,0)');
+        ctx.save();
+        ctx.fillStyle = aura;
+        ctx.fillRect(0, 0, width, height);
+        ctx.restore();
+      }
 
-      drawBone3D(pelvis, leftKnee, 6, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawBone3D(leftKnee, leftFoot, 5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawSphere3D(leftFoot, 5, boneColor, highlight, width, height, breathRotX, breathRotY, glowBlur);
+      // Omuz ve kalça eklemleri: gövde artık tek çizgi değil, hacimli
+      const torsoColor = prog >= 0.95 ? '#14b894' : '#94a3b8';
+      const shoulderL: Vec3 = { x: posX - 13, y: neck.y + 5, z: posZ };
+      const shoulderR: Vec3 = { x: posX + 13, y: neck.y + 5, z: posZ };
+      const hipL: Vec3 = { x: posX - 9, y: pelvis.y, z: posZ };
+      const hipR: Vec3 = { x: posX + 9, y: pelvis.y, z: posZ };
 
-      drawBone3D(pelvis, rightKnee, 6, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawBone3D(rightKnee, rightFoot, 5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawSphere3D(rightFoot, 5, boneColor, highlight, width, height, breathRotX, breathRotY, glowBlur);
+      /*
+       * Derinlik sıralaması (painter's algorithm): her parça kendi z değeriyle
+       * kuyruğa girer, uzaktakiler önce çizilir. Fareyle döndürünce hangi
+       * kol/bacak öndeyse gerçekten önde görünür.
+       */
+      const cmds: { z: number; draw: () => void }[] = [];
+      const zOf = (...pts: Vec3[]) =>
+        pts.reduce((sum, p) => sum + project(p, width, height, breathRotX, breathRotY).z, 0) /
+        pts.length;
+      const bone = (a: Vec3, b: Vec3, thickness: number, color: string) =>
+        cmds.push({
+          z: zOf(a, b),
+          draw: () =>
+            drawBone3D(a, b, thickness, color, width, height, breathRotX, breathRotY, glowBlur),
+        });
+      const ball = (p: Vec3, radius: number, color: string) =>
+        cmds.push({
+          z: zOf(p),
+          draw: () =>
+            drawSphere3D(p, radius, color, highlight, width, height, breathRotX, breathRotY, glowBlur),
+        });
 
-      drawBone3D(neck, leftElbow, 5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawBone3D(leftElbow, leftHand, 4.5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawSphere3D(leftHand, 5.5, mainColor, highlight, width, height, breathRotX, breathRotY, glowBlur);
+      // Gövde
+      bone(neck, pelvis, 13, torsoColor);
+      bone(shoulderL, shoulderR, 9, boneColor);
+      bone(hipL, hipR, 9, boneColor);
 
-      drawBone3D(neck, rightElbow, 5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawBone3D(rightElbow, rightHand, 4.5, boneColor, width, height, breathRotX, breathRotY, glowBlur);
-      drawSphere3D(rightHand, 5.5, mainColor, highlight, width, height, breathRotX, breathRotY, glowBlur);
+      // Bacaklar
+      bone(hipL, leftKnee, 7, boneColor);
+      bone(leftKnee, leftFoot, 6, boneColor);
+      ball(leftFoot, 6, boneColor);
+      bone(hipR, rightKnee, 7, boneColor);
+      bone(rightKnee, rightFoot, 6, boneColor);
+      ball(rightFoot, 6, boneColor);
 
+      // Kollar
+      bone(shoulderL, leftElbow, 6, boneColor);
+      bone(leftElbow, leftHand, 5, boneColor);
+      ball(leftHand, 6, mainColor);
+      bone(shoulderR, rightElbow, 6, boneColor);
+      bone(rightElbow, rightHand, 5, boneColor);
+      ball(rightHand, 6, mainColor);
+
+      cmds.sort((a, b) => b.z - a.z);
+      for (const cmd of cmds) cmd.draw();
       // 3. 3D KAFA
       drawSphere3D(
         headCenter,
@@ -409,6 +464,31 @@ export function Stickman3D({ percent, totalGoals, completedGoals }: Props) {
       );
 
       const headProj = project(headCenter, width, height, breathRotX, breathRotY);
+
+      // 7+ gün seri: altın taç
+      if (streakRef.current >= 7) {
+        const s = headProj.scale;
+        const cx = headProj.x;
+        const base = headProj.y - 21 * s;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx - 17 * s, base);
+        ctx.lineTo(cx - 19 * s, base - 17 * s);
+        ctx.lineTo(cx - 9 * s, base - 8 * s);
+        ctx.lineTo(cx, base - 21 * s);
+        ctx.lineTo(cx + 9 * s, base - 8 * s);
+        ctx.lineTo(cx + 19 * s, base - 17 * s);
+        ctx.lineTo(cx + 17 * s, base);
+        ctx.closePath();
+        ctx.fillStyle = '#fbbf24';
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 1.5 * s;
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
 
       // Normal Gözler (Gözlük tam inmeden önce görünür)
       if (glassDrop < 0.95) {
@@ -630,6 +710,23 @@ export function Stickman3D({ percent, totalGoals, completedGoals }: Props) {
             );
           })}
         </div>
+      </div>
+
+      {/* Seri ve seviye */}
+      <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold">
+        <span
+          className={cn(
+            'rounded-full border px-2.5 py-1',
+            streak >= 3
+              ? 'border-orange-400/50 bg-orange-400/15 text-orange-300'
+              : 'border-white/[0.08] bg-white/[0.04] text-muted-foreground',
+          )}
+        >
+          🔥 {streak} gün seri{streak >= 7 ? ' · 👑' : streak >= 3 ? ' · alev' : ''}
+        </span>
+        <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-muted-foreground">
+          Seviye {level}
+        </span>
       </div>
 
       {/* Alt Seviye & Gözlük Durumu */}
