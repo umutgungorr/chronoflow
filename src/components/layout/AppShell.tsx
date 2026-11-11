@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarRange, Flame, LayoutGrid, ShieldCheck, Target, TrendingUp } from 'lucide-react';
+import { CalendarRange, Flame, LayoutGrid, ShieldCheck, Sparkles, Target, TrendingUp } from 'lucide-react';
 
 import { useIsAdmin } from '@/hooks/use-is-admin';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,7 @@ const ITEMS = [
 ] as const;
 
 const ADMIN_ITEM = { href: '/admin', label: 'Yönetim', icon: ShieldCheck } as const;
+const MOTIVATION_ITEM = { href: '/motivasyon', label: 'Motivasyon', icon: Sparkles } as const;
 
 /** Yeni ChronoFlow marka logosu. */
 function Logo({ className }: { className?: string }) {
@@ -41,7 +42,9 @@ function Logo({ className }: { className?: string }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
-  const items = isAdmin ? [...ITEMS, ADMIN_ITEM] : ITEMS;
+  const items = isAdmin
+    ? [...ITEMS, ADMIN_ITEM, MOTIVATION_ITEM]
+    : [...ITEMS, MOTIVATION_ITEM];
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
 
