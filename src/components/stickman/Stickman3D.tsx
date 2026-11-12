@@ -2,6 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Trophy } from 'lucide-react';
+import * as THREE from 'three';
+
+import {
+  buildStaircase,
+  buildStickmanRig,
+  STAIR_COUNT,
+  STAIR_DX,
+  STAIR_RISE,
+  STAIR_X0,
+} from '@/components/stickman/buildStickmanRig';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -12,8 +22,6 @@ type Props = {
   streak?: number;
   level?: number;
 };
-
-type Vec3 = { x: number; y: number; z: number };
 
 const STAGES = [
   { threshold: 0, label: 'Başlangıç' },
@@ -31,12 +39,19 @@ function clamp01(v: number) {
   return Math.max(0, Math.min(1, v));
 }
 
+function smoothstep(t: number) {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+}
+
 export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, level = 1 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streakRef = useRef(streak);
   useEffect(() => {
     streakRef.current = streak;
   }, [streak]);
+
   const [bounce, setBounce] = useState(false);
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [displayedPercent, setDisplayedPercent] = useState(percent);
@@ -45,22 +60,22 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
   const isHalfway = percent >= 50;
   const isStarted = completedGoals > 0;
 
-  // Hedef ilerleme (0..1) ve yavaşça ona yaklaşan anlık ilerleme (0..1)
+  // Hedef ve yumuşak geçiş ref'leri (animasyon döngüsünden okunur)
   const targetProgressRef = useRef(totalGoals > 0 ? percent / 100 : 0);
   const smoothProgressRef = useRef(totalGoals > 0 ? percent / 100 : 0);
   const sunglassesDropRef = useRef(isComplete ? 1 : 0);
 
-  // Fare rotasyonu
-  const targetRot = useRef({ x: 0, y: 0 });
-  const currentRot = useRef({ x: 0, y: 0 });
+  const targetTilt = useRef({ x: 0, y: 0 });
+  const currentTilt = useRef({ x: 0, y: 0 });
   const jumpOffset = useRef(0);
   const jumpVelocity = useRef(0);
+  const spinBoost = useRef(0);
 
   useEffect(() => {
     targetProgressRef.current = totalGoals > 0 ? percent / 100 : 0;
   }, [percent, totalGoals]);
 
-  // Sayısal yüzdeyi de yavaş yavaş artır/azalt
+  // Sayısal yüzdeyi de adım adım güncelle
   useEffect(() => {
     if (displayedPercent === percent) return;
     const timer = setTimeout(() => {
@@ -76,550 +91,383 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
 
   const quotes = isComplete
     ? [
-        'Adım adım zirveye ulaştık, gözlük yavaşça yerine oturdu! 😎🔥',
+        'Basamakları tek tek çıktık, gözlük yavaşça yerine oturdu! 😎🔥',
         'Bütün hedefler tamam! 3D Boss Modu aktif! 🏆',
-        'Sabırla ilerledin ve günü fethettin şampiyon! 🚀',
+        'Zirveye tırmandın şampiyon! 🚀',
       ]
     : isHalfway
       ? [
-          'Yavaş yavaş zirveye yürüyoruz, gözlüğe az kaldı! 👀',
-          'Yolun yarısını geçtik, adımlarımız hızlanıyor!',
-          'Harika gidişat! Her kutucukta bir adım daha ilerliyorum! ⚡',
+          'Merdivenleri adım adım tırmanıyoruz, gözlüğe az kaldı! 👀',
+          'Yarıyı geçtik, üst basamaklar parlamaya başladı!',
+          'Her tamamladığın görevde bir basamak daha yukarı çıkıyorum! ⚡',
         ]
       : isStarted
         ? [
-            'Yola çıktık! Sen kutucukları tikledikçe adım adım ilerliyorum! 💪',
-            'Isınma adımları başladı, hedefe doğru yürüyoruz!',
-            'Yavaş ve kararlı adımlarla zirveye! 🎯',
+            'İlk basamaktan yola çıktık! Tikledikçe tırmanıyorum! 💪',
+            'Adım adım yukarı çıkıyoruz, hız kesmek yok!',
+            'Sabırla her kutucuk bir basamak demek! 🎯',
           ]
         : [
-            'Başlangıç taşındayım... İlk kutucuğu tikle de yürümeye başlayayım! 😴',
-            'Adım adım ilerlemek için ilk hedefini tamamla!',
-            'Haftalık kutucukları doldurdukça hedefe yürüyeceğim! 🚀',
+            'İlk basamaktayım... Bir hedef tikle de merdiveni çıkmaya başlayayım! 😴',
+            'Adım adım zirveye tırmanmak için ilk görevini tamamla!',
+            'Haftalık kutucukları doldurdukça yukarı çıkacağım! 🚀',
           ];
 
   const handleCanvasClick = () => {
     setBounce(true);
     setQuoteIdx((prev) => (prev + 1) % quotes.length);
-    jumpVelocity.current = 8.5;
-    setTimeout(() => setBounce(false), 600);
+    jumpVelocity.current = 0.082;
+    if (targetProgressRef.current >= 0.999) {
+      spinBoost.current = Math.PI * 2;
+    }
+    setTimeout(() => setBounce(false), 500);
   };
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-    let animId: number;
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+    } catch {
+      const ctx2d = canvas.getContext('2d');
+      if (ctx2d) {
+        canvas.width = 280;
+        canvas.height = 280;
+        ctx2d.fillStyle = '#94a3b8';
+        ctx2d.font = '12px sans-serif';
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText('3D WebGL bu tarayıcıda desteklenmiyor', 140, 140);
+      }
+      return;
+    }
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
+    const camPivot = new THREE.Group();
+    camPivot.position.set(0.05, 1.38, 0);
+    scene.add(camPivot);
+    camera.position.set(0.1, 1.05, 6.75);
+    camera.lookAt(0, 0.05, 0);
+    camPivot.add(camera);
+
+    // Sahne Işıkları (3 noktalı stüdyo aydınlatması + neon rim)
+    const hemiLight = new THREE.HemisphereLight('#a7f3d0', '#09111a', 0.95);
+    scene.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight('#ffffff', 2.2);
+    keyLight.position.set(3.2, 6.5, 4.5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 16;
+    keyLight.shadow.camera.left = -4;
+    keyLight.shadow.camera.right = 4;
+    keyLight.shadow.camera.top = 4;
+    keyLight.shadow.camera.bottom = -2;
+    keyLight.shadow.bias = -0.0005;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight('#2ee6b8', 1.6);
+    rimLight.position.set(-4.0, 3.2, -3.5);
+    scene.add(rimLight);
+
+    const followGlow = new THREE.PointLight('#2ee6b8', 1.4, 5.5);
+    followGlow.position.set(0, 2.2, 1.6);
+    scene.add(followGlow);
+
+    // Zemin diski (hafif yansıyan karanlık platform)
+    const stageGroup = new THREE.Group();
+    scene.add(stageGroup);
+
+    const floorGeo = new THREE.CylinderGeometry(3.2, 3.4, 0.12, 48);
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: '#060a0f',
+      roughness: 0.65,
+      metalness: 0.4,
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.position.set(0, -0.41, 0);
+    floor.receiveShadow = true;
+    stageGroup.add(floor);
+
+    const ringGeo = new THREE.RingGeometry(2.85, 2.9, 64);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: '#2ee6b8',
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide,
+    });
+    const floorRing = new THREE.Mesh(ringGeo, ringMat);
+    floorRing.rotation.x = -Math.PI / 2;
+    floorRing.position.set(0, -0.345, 0);
+    stageGroup.add(floorRing);
+
+    // 3D Merdiven ve Karakter
+    const stairs = buildStaircase();
+    stageGroup.add(stairs.group);
+
+    const rig = buildStickmanRig();
+    stageGroup.add(rig.root);
+
+    // 3D Seri Alev Parçacıkları (3+ gün seride aktif)
+    const emberCount = 16;
+    const emberGroup = new THREE.Group();
+    rig.root.add(emberGroup);
+    const emberGeo = new THREE.SphereGeometry(0.032, 8, 8);
+    const emberMat = new THREE.MeshBasicMaterial({
+      color: '#fb923c',
+      transparent: true,
+      opacity: 0.85,
+    });
+    const embers: { mesh: THREE.Mesh; phase: number; radius: number; speed: number }[] = [];
+    for (let i = 0; i < emberCount; i++) {
+      const m = new THREE.Mesh(emberGeo, emberMat);
+      emberGroup.add(m);
+      embers.push({
+        mesh: m,
+        phase: (i / emberCount) * Math.PI * 2,
+        radius: 0.36 + (i % 3) * 0.08,
+        speed: 1.4 + (i % 4) * 0.35,
+      });
+    }
+
+    // Boyutlandırma
+    const syncSize = () => {
+      const rect = container.getBoundingClientRect();
+      const w = Math.max(180, Math.round(rect.width));
+      const h = Math.max(180, Math.round(rect.height));
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    syncSize();
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(container);
+
+    let animId = 0;
     let time = 0;
     let walkPhase = 0;
+    let facingYaw = 0.25;
 
-    const project = (p: Vec3, width: number, height: number, rotX: number, rotY: number) => {
-      const cosY = Math.cos(rotY);
-      const sinY = Math.sin(rotY);
-      const x1 = p.x * cosY + p.z * sinY;
-      const z1 = -p.x * sinY + p.z * cosY;
+    const greenLow = new THREE.Color('#4ade80');
+    const turquoiseBoss = new THREE.Color('#2ee6b8');
 
-      const cosX = Math.cos(rotX);
-      const sinX = Math.sin(rotX);
-      const y2 = p.y * cosX - z1 * sinX;
-      const z2 = p.y * sinX + z1 * cosX;
+    const renderFrame = () => {
+      time += 0.016;
 
-      const cameraDistance = 360;
-      const scale = cameraDistance / (cameraDistance + z2 + 90);
-
-      return {
-        x: width / 2 + x1 * scale,
-        y: height / 2 + y2 * scale - jumpOffset.current,
-        scale,
-        z: z2,
-      };
-    };
-
-    const drawSphere3D = (
-      p: Vec3,
-      radius: number,
-      color: string,
-      highlightColor: string,
-      width: number,
-      height: number,
-      rotX: number,
-      rotY: number,
-      glowBlur: number,
-    ) => {
-      const proj = project(p, width, height, rotX, rotY);
-      const r = Math.max(1, radius * proj.scale);
-
-      const grad = ctx.createRadialGradient(
-        proj.x - r * 0.35,
-        proj.y - r * 0.4,
-        r * 0.1,
-        proj.x,
-        proj.y,
-        r,
-      );
-      grad.addColorStop(0, highlightColor);
-      grad.addColorStop(0.38, color);
-      grad.addColorStop(0.9, '#051119');
-      grad.addColorStop(1, '#000000');
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = glowBlur;
-      ctx.fill();
-      ctx.restore();
-    };
-
-    const drawBone3D = (
-      p1: Vec3,
-      p2: Vec3,
-      thickness: number,
-      color: string,
-      width: number,
-      height: number,
-      rotX: number,
-      rotY: number,
-      glowBlur: number,
-    ) => {
-      const proj1 = project(p1, width, height, rotX, rotY);
-      const proj2 = project(p2, width, height, rotX, rotY);
-      const t = thickness * ((proj1.scale + proj2.scale) / 2);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(proj1.x, proj1.y);
-      ctx.lineTo(proj2.x, proj2.y);
-      ctx.lineCap = 'round';
-      ctx.lineWidth = Math.max(2, t);
-      ctx.strokeStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = glowBlur;
-      ctx.stroke();
-      ctx.restore();
-    };
-
-    const render = () => {
-      // Yavaş, dingin zaman akışı
-      time += 0.015;
-
-      // İlerleme değerini hedefe doğru YAVAŞ YAVAŞ yaklaştır
+      // Yavaş ve adım adım ilerleme (0..1)
       const targetP = targetProgressRef.current;
       const diffP = targetP - smoothProgressRef.current;
-      const isWalking = Math.abs(diffP) > 0.004;
+      const isWalking = Math.abs(diffP) > 0.003;
 
       if (isWalking) {
-        // Sabit ve yumuşak hızla adım adım ilerle
-        const maxStep = 0.0045;
-        const delta = clamp01(Math.abs(diffP)) * 0.025;
-        const step = Math.sign(diffP) * Math.min(maxStep, Math.max(0.0012, delta));
+        const maxStep = 0.0028;
+        const delta = clamp01(Math.abs(diffP)) * 0.022;
+        const step = Math.sign(diffP) * Math.min(maxStep, Math.max(0.001, delta));
         smoothProgressRef.current = clamp01(smoothProgressRef.current + step);
-        walkPhase += 0.09;
+        walkPhase += 0.11;
       } else {
         smoothProgressRef.current = targetP;
       }
 
-      const prog = smoothProgressRef.current; // 0.0 -> 1.0
+      const prog = smoothProgressRef.current;
 
-      // Gözlük iniş animasyonu (yalnızca %100'e yaklaşınca yukarıdan yavaşça iner)
-      const sunglassesTarget = targetP >= 0.999 && prog >= 0.92 ? 1 : 0;
-      sunglassesDropRef.current += (sunglassesTarget - sunglassesDropRef.current) * 0.035;
-      const glassDrop = clamp01(sunglassesDropRef.current);
+      // Basamak matematiği: önce yatay yürü, sonra diz kaldırıp bir üst basamağa çık
+      const idxF = prog * (STAIR_COUNT - 1);
+      const baseStep = Math.min(STAIR_COUNT - 1, Math.floor(idxF + 1e-6));
+      const frac = idxF - baseStep;
+      const climbFrac = smoothstep((frac - 0.28) / 0.72);
+      const climbedSteps = baseStep + climbFrac;
 
-      // Zıplama fiziği (daha yumuşak yerçekimi)
-      if (jumpVelocity.current > 0 || jumpOffset.current > 0) {
+      const posX = STAIR_X0 + idxF * STAIR_DX;
+      const posY = climbedSteps * STAIR_RISE;
+
+      // Zıplama & kutlama dönüşü fiziği
+      if (jumpVelocity.current !== 0 || jumpOffset.current > 0) {
         jumpOffset.current += jumpVelocity.current;
-        jumpVelocity.current -= 0.55;
-        if (jumpOffset.current < 0) {
+        jumpVelocity.current -= 0.0052;
+        if (jumpOffset.current <= 0) {
           jumpOffset.current = 0;
           jumpVelocity.current = 0;
         }
       }
-
-      // Yumuşak Fare Takibi
-      currentRot.current.x += (targetRot.current.x - currentRot.current.x) * 0.045;
-      currentRot.current.y += (targetRot.current.y - currentRot.current.y) * 0.045;
-
-      // Sakin nefes alma + yürürken hafif adım salınımı
-      const walkBob = isWalking ? Math.abs(Math.sin(walkPhase)) * -5 : 0;
-      const idleY = Math.sin(time * 1.6) * 2.2 + walkBob;
-      const breathRotY = currentRot.current.y + Math.sin(time * 0.9) * 0.04;
-      const breathRotX = currentRot.current.x + Math.cos(time * 1.1) * 0.02;
-
-      const width = canvas.width;
-      const height = canvas.height;
-
-      ctx.clearRect(0, 0, width, height);
-
-      // Karakterin 3D yol üzerindeki konumu:
-      // Sol-arkadan (-52, z: 35) -> Merkez-öne (0, z: -10) yavaşça yürür!
-      const posX = lerp(-46, 0, prog);
-      const posZ = lerp(32, -8, prog);
-
-      // 1. 3D ADIM TAŞLARI YOLU (5 Aşamalı İlerleme Yolu)
-      for (let i = 0; i < 5; i++) {
-        const stoneT = i / 4;
-        const sx = lerp(-46, 0, stoneT);
-        const sz = lerp(32, -8, stoneT);
-        const stoneProj = project({ x: sx, y: 112, z: sz }, width, height, breathRotX, breathRotY);
-        const reached = prog + 0.02 >= stoneT;
-        const r = (i === 4 ? 26 : 16) * stoneProj.scale;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(stoneProj.x, stoneProj.y, r, r * 0.36, 0, 0, Math.PI * 2);
-        ctx.fillStyle = reached
-          ? 'rgba(46, 230, 184, 0.22)'
-          : 'rgba(255, 255, 255, 0.04)';
-        ctx.strokeStyle = reached
-          ? 'rgba(46, 230, 184, 0.7)'
-          : 'rgba(255, 255, 255, 0.14)';
-        ctx.lineWidth = reached ? 2 : 1;
-        if (reached) {
-          ctx.shadowColor = '#2ee6b8';
-          ctx.shadowBlur = 10;
-        }
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
+      if (spinBoost.current > 0.01) {
+        spinBoost.current *= 0.88;
+      } else {
+        spinBoost.current = 0;
       }
 
-      // Karakterin bastığı ana hologram halkası
-      ctx.save();
-      const platProj = project(
-        { x: posX, y: 110, z: posZ },
-        width,
-        height,
-        breathRotX,
-        breathRotY,
-      );
-      const platRadius = lerp(42, 66, prog) * platProj.scale;
-
-      ctx.beginPath();
-      ctx.ellipse(platProj.x, platProj.y, platRadius, platRadius * 0.35, 0, 0, Math.PI * 2);
-      ctx.fillStyle =
-        prog >= 0.98 ? 'rgba(46, 230, 184, 0.16)' : 'rgba(46, 230, 184, 0.07)';
-      ctx.strokeStyle =
-        prog >= 0.98 ? 'rgba(46, 230, 184, 0.65)' : 'rgba(46, 230, 184, 0.3)';
-      ctx.lineWidth = 1.8;
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-
-      // Karakter Renkleri
-      const mainColor = prog >= 0.95 ? '#2ee6b8' : '#4ade80';
-      const highlight = prog >= 0.95 ? '#d1fae5' : '#bbf7d0';
-      const boneColor = prog >= 0.95 ? '#2ee6b8' : '#e2e8f0';
-      const glowBlur = lerp(3, 12, prog);
-
-      // 2. STICKMAN 3D İSKELETİ (İlerlemeye göre duruşu yavaşça dikleşir)
-      const slouch = lerp(8, 0, prog); // %0'da hafif öne eğik, %100'de dimdik
-      const headCenter: Vec3 = {
-        x: posX,
-        y: -58 + slouch + idleY,
-        z: posZ - slouch * 0.5,
-      };
-      const neck: Vec3 = { x: posX, y: -34 + slouch + idleY, z: posZ };
-      const pelvis: Vec3 = { x: posX, y: 35 + idleY * 0.6, z: posZ };
-
-      // Yürüyüş kol/bacak salınımı
-      const walkSwing = isWalking ? Math.sin(walkPhase) * 16 : Math.sin(time * 1.4) * 4;
-
-      // Kolların hedef konumu: prog (0 -> 0.5 -> 1.0) arasında yumuşak geçiş
-      const celebrateFactor = clamp01((prog - 0.82) / 0.18);
-      const flexFactor = clamp01((prog - 0.4) / 0.35) * (1 - celebrateFactor);
-
-      const wave = Math.sin(time * 2.2) * 4;
-
-      const leftElbow: Vec3 = {
-        x: posX + lerp(-22, lerp(-32, -36, celebrateFactor), flexFactor + celebrateFactor),
-        y: lerp(-8, lerp(-12, -38, celebrateFactor), flexFactor + celebrateFactor) + idleY,
-        z: posZ + lerp(4, 10, prog) + walkSwing * 0.35,
-      };
-      const rightElbow: Vec3 = {
-        x: posX + lerp(22, lerp(32, 36, celebrateFactor), flexFactor + celebrateFactor),
-        y: lerp(-8, lerp(-12, -38, celebrateFactor), flexFactor + celebrateFactor) + idleY,
-        z: posZ + lerp(4, 10, prog) - walkSwing * 0.35,
-      };
-
-      const leftHand: Vec3 = {
-        x: posX + lerp(-28, lerp(-36, -48, celebrateFactor), flexFactor + celebrateFactor),
-        y:
-          lerp(16, lerp(-42, -74 + wave, celebrateFactor), flexFactor + celebrateFactor) +
-          idleY,
-        z: posZ + lerp(8, 16, prog) + walkSwing * 0.7,
-      };
-      const rightHand: Vec3 = {
-        x: posX + lerp(28, lerp(36, 48, celebrateFactor), flexFactor + celebrateFactor),
-        y:
-          lerp(16, lerp(-42, -74 - wave, celebrateFactor), flexFactor + celebrateFactor) +
-          idleY,
-        z: posZ + lerp(8, 16, prog) - walkSwing * 0.7,
-      };
-
-      // Bacaklar (Yürürken adım atar)
-      const legStride = isWalking ? Math.sin(walkPhase) * 14 : 0;
-      const leftKnee: Vec3 = {
-        x: posX - 16,
-        y: 70 + idleY * 0.4,
-        z: posZ + 4 - legStride * 0.5,
-      };
-      const rightKnee: Vec3 = {
-        x: posX + 16,
-        y: 70 + idleY * 0.4,
-        z: posZ + 4 + legStride * 0.5,
-      };
-      const leftFoot: Vec3 = {
-        x: posX - lerp(20, 25, prog),
-        y: 108 - Math.max(0, legStride * 0.35),
-        z: posZ - legStride,
-      };
-      const rightFoot: Vec3 = {
-        x: posX + lerp(20, 25, prog),
-        y: 108 - Math.max(0, -legStride * 0.35),
-        z: posZ + legStride,
-      };
-
-      // Seri (streak) aurası: 3+ gün turuncu alev ışıması, 7+ gün daha güçlü
-      if (streakRef.current >= 3) {
-        const auraProj = project({ x: posX, y: 20, z: posZ + 20 }, width, height, breathRotX, breathRotY);
-        const flicker = 0.85 + Math.sin(time * 9) * 0.08 + Math.sin(time * 5.3) * 0.07;
-        const auraR = (streakRef.current >= 7 ? 120 : 95) * auraProj.scale * flicker;
-        const aura = ctx.createRadialGradient(auraProj.x, auraProj.y, 8, auraProj.x, auraProj.y, auraR);
-        aura.addColorStop(0, streakRef.current >= 7 ? 'rgba(251,191,36,0.34)' : 'rgba(251,146,60,0.28)');
-        aura.addColorStop(0.55, 'rgba(249,115,22,0.12)');
-        aura.addColorStop(1, 'rgba(249,115,22,0)');
-        ctx.save();
-        ctx.fillStyle = aura;
-        ctx.fillRect(0, 0, width, height);
-        ctx.restore();
+      // Merdiven ışıklarını yak
+      for (let i = 0; i < stairs.steps.length; i++) {
+        const reached = idxF + 0.02 >= i;
+        const stepObj = stairs.steps[i]!;
+        stepObj.topMat.emissiveIntensity = lerp(stepObj.topMat.emissiveIntensity, reached ? 0.35 : 0.05, 0.08);
+        stepObj.trimMat.emissiveIntensity = lerp(stepObj.trimMat.emissiveIntensity, reached ? 1.4 : 0.15, 0.08);
       }
 
-      // Omuz ve kalça eklemleri: gövde artık tek çizgi değil, hacimli
-      const torsoColor = prog >= 0.95 ? '#14b894' : '#94a3b8';
-      const shoulderL: Vec3 = { x: posX - 13, y: neck.y + 5, z: posZ };
-      const shoulderR: Vec3 = { x: posX + 13, y: neck.y + 5, z: posZ };
-      const hipL: Vec3 = { x: posX - 9, y: pelvis.y, z: posZ };
-      const hipR: Vec3 = { x: posX + 9, y: pelvis.y, z: posZ };
+      // Zirve bayrağı parlaması
+      const atTop = prog >= 0.995;
+      stairs.flagMat.color.set(atTop ? '#2ee6b8' : '#475569');
+      stairs.flagMat.emissiveIntensity = atTop ? 1.3 + Math.sin(time * 4) * 0.3 : 0.1;
+      stairs.flagMesh.position.y = (STAIR_COUNT - 1) * STAIR_RISE + 0.82 + (atTop ? Math.sin(time * 3) * 0.02 : 0);
 
-      /*
-       * Derinlik sıralaması (painter's algorithm): her parça kendi z değeriyle
-       * kuyruğa girer, uzaktakiler önce çizilir. Fareyle döndürünce hangi
-       * kol/bacak öndeyse gerçekten önde görünür.
-       */
-      const cmds: { z: number; draw: () => void }[] = [];
-      const zOf = (...pts: Vec3[]) =>
-        pts.reduce((sum, p) => sum + project(p, width, height, breathRotX, breathRotY).z, 0) /
-        pts.length;
-      const bone = (a: Vec3, b: Vec3, thickness: number, color: string) =>
-        cmds.push({
-          z: zOf(a, b),
-          draw: () =>
-            drawBone3D(a, b, thickness, color, width, height, breathRotX, breathRotY, glowBlur),
-        });
-      const ball = (p: Vec3, radius: number, color: string) =>
-        cmds.push({
-          z: zOf(p),
-          draw: () =>
-            drawSphere3D(p, radius, color, highlight, width, height, breathRotX, breathRotY, glowBlur),
-        });
+      // Karakter rengi (%100'de turkuaza geçer)
+      const colorMix = smoothstep((prog - 0.8) / 0.2);
+      rig.materials.body.color.copy(greenLow).lerp(turquoiseBoss, colorMix);
+      rig.materials.core.emissiveIntensity = lerp(0.7, 1.6, prog);
+      rig.chestCore.rotation.y = time * 1.4;
 
-      // Gövde
-      bone(neck, pelvis, 13, torsoColor);
-      bone(shoulderL, shoulderR, 9, boneColor);
-      bone(hipL, hipR, 9, boneColor);
+      // Karakter yönü: yürürken merdivene doğru (+X, hafif öne), durunca kameraya dönük
+      const walkDir = diffP >= 0 ? Math.PI * 0.36 : -Math.PI * 0.36;
+      const idleFacing = atTop ? 0.05 : 0.24;
+      const targetYaw = isWalking ? walkDir : idleFacing;
+      facingYaw = lerp(facingYaw, targetYaw, 0.08);
 
-      // Bacaklar
-      bone(hipL, leftKnee, 7, boneColor);
-      bone(leftKnee, leftFoot, 6, boneColor);
-      ball(leftFoot, 6, boneColor);
-      bone(hipR, rightKnee, 7, boneColor);
-      bone(rightKnee, rightFoot, 6, boneColor);
-      ball(rightFoot, 6, boneColor);
+      // Karakter pozisyonu
+      const walkBob = isWalking ? Math.abs(Math.sin(walkPhase)) * 0.045 : 0;
+      rig.root.position.set(posX, posY + jumpOffset.current + walkBob, 0);
+      rig.root.rotation.y = facingYaw + spinBoost.current;
 
-      // Kollar
-      bone(shoulderL, leftElbow, 6, boneColor);
-      bone(leftElbow, leftHand, 5, boneColor);
-      ball(leftHand, 6, mainColor);
-      bone(shoulderR, rightElbow, 6, boneColor);
-      bone(rightElbow, rightHand, 5, boneColor);
-      ball(rightHand, 6, mainColor);
+      // Duruş: %0'da hafif kambur, %100'de dik
+      const slouch = lerp(0.16, 0, prog);
+      rig.spine.rotation.x = slouch + Math.sin(time * 1.6) * 0.02;
+      rig.head.rotation.x = -slouch * 0.5 + Math.sin(time * 1.4) * 0.03;
 
-      cmds.sort((a, b) => b.z - a.z);
-      for (const cmd of cmds) cmd.draw();
-      // 3. 3D KAFA
-      drawSphere3D(
-        headCenter,
-        23,
-        mainColor,
-        highlight,
-        width,
-        height,
-        breathRotX,
-        breathRotY,
-        glowBlur,
-      );
+      // Bacak animasyonu (merdivende diz yukarı kalkar)
+      const stride = isWalking ? Math.sin(walkPhase) : 0;
+      const leftLift = isWalking ? Math.max(0, stride) : 0;
+      const rightLift = isWalking ? Math.max(0, -stride) : 0;
 
-      const headProj = project(headCenter, width, height, breathRotX, breathRotY);
+      rig.leftHip.rotation.x = isWalking ? -stride * 0.55 - leftLift * 0.35 : 0.03;
+      rig.leftKnee.rotation.x = isWalking ? leftLift * 0.95 + 0.08 : 0.04;
+      rig.rightHip.rotation.x = isWalking ? stride * 0.55 - rightLift * 0.35 : -0.03;
+      rig.rightKnee.rotation.x = isWalking ? rightLift * 0.95 + 0.08 : 0.04;
 
-      // 7+ gün seri: altın taç
-      if (streakRef.current >= 7) {
-        const s = headProj.scale;
-        const cx = headProj.x;
-        const base = headProj.y - 21 * s;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(cx - 17 * s, base);
-        ctx.lineTo(cx - 19 * s, base - 17 * s);
-        ctx.lineTo(cx - 9 * s, base - 8 * s);
-        ctx.lineTo(cx, base - 21 * s);
-        ctx.lineTo(cx + 9 * s, base - 8 * s);
-        ctx.lineTo(cx + 19 * s, base - 17 * s);
-        ctx.lineTo(cx + 17 * s, base);
-        ctx.closePath();
-        ctx.fillStyle = '#fbbf24';
-        ctx.strokeStyle = '#b45309';
-        ctx.lineWidth = 1.5 * s;
-        ctx.shadowColor = '#fbbf24';
-        ctx.shadowBlur = 12;
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
+      // Kol animasyonu: yürüme salınımı -> yarıda özgüven -> %100'de Boss kutlaması
+      const celebrate = smoothstep((prog - 0.86) / 0.14);
+      const wave = Math.sin(time * 3.2) * 0.14;
+
+      if (isWalking) {
+        rig.leftShoulder.rotation.x = stride * 0.52;
+        rig.leftShoulder.rotation.z = -0.14;
+        rig.leftElbow.rotation.x = -0.45 - Math.max(0, -stride) * 0.35;
+
+        rig.rightShoulder.rotation.x = -stride * 0.52;
+        rig.rightShoulder.rotation.z = 0.14;
+        rig.rightElbow.rotation.x = -0.45 - Math.max(0, stride) * 0.35;
+      } else {
+        // Bekleme / kutlama geçişi
+        rig.leftShoulder.rotation.x = lerp(0.05, -0.35, celebrate);
+        rig.leftShoulder.rotation.z = lerp(-0.15, -2.55 + wave, celebrate);
+        rig.leftElbow.rotation.x = lerp(-0.22, -0.4, celebrate);
+
+        rig.rightShoulder.rotation.x = lerp(0.05, -0.35, celebrate);
+        rig.rightShoulder.rotation.z = lerp(0.15, 2.55 - wave, celebrate);
+        rig.rightElbow.rotation.x = lerp(-0.22, -0.4, celebrate);
       }
 
-      // Normal Gözler (Gözlük tam inmeden önce görünür)
-      if (glassDrop < 0.95) {
-        ctx.save();
-        ctx.fillStyle = '#000000';
-        const eyeOffset = 7 * headProj.scale;
-        const eyeY = headProj.y - 2 * headProj.scale;
+      // 3D Güneş Gözlüğü inişi (yalnızca %100 hedefe ulaşınca)
+      const glassesTarget = targetP >= 0.999 && prog >= 0.93 ? 1 : 0;
+      sunglassesDropRef.current += (glassesTarget - sunglassesDropRef.current) * 0.045;
+      const glassDrop = clamp01(sunglassesDropRef.current);
 
-        ctx.beginPath();
-        ctx.arc(headProj.x - eyeOffset, eyeY, 2.4 * headProj.scale, 0, Math.PI * 2);
-        ctx.arc(headProj.x + eyeOffset, eyeY, 2.4 * headProj.scale, 0, Math.PI * 2);
-        ctx.fill();
-
-        // İlerlemeye göre büyüyen gülümseme
-        ctx.beginPath();
-        ctx.arc(
-          headProj.x,
-          headProj.y + 7 * headProj.scale,
-          lerp(4, 7.5, prog) * headProj.scale,
-          0.15 * Math.PI,
-          0.85 * Math.PI,
-        );
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2 * headProj.scale;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 4. YUKARIDAN YAVAŞÇA İNEN 3D GÜNEŞ GÖZLÜĞÜ ("Deal With It" Efektli)
       if (glassDrop > 0.01) {
-        const glassWidth = 36 * headProj.scale;
-        const glassHeight = 15 * headProj.scale;
-        // Yukarıdan (-45px) göz hizasına (-2px) yavaşça iner
-        const dropOffsetY = lerp(-48, -2, glassDrop) * headProj.scale;
+        rig.sunglasses.visible = true;
+        rig.sunglasses.position.y = lerp(0.42, 0.0, smoothstep(glassDrop));
+        rig.sunglasses.rotation.x = lerp(-0.35, 0, glassDrop);
+      } else {
+        rig.sunglasses.visible = false;
+      }
 
-        ctx.save();
-        ctx.globalAlpha = clamp01(glassDrop * 1.2);
-        ctx.translate(headProj.x, headProj.y + dropOffsetY);
-        ctx.rotate(breathRotY * 0.45);
+      // Gülümseme genişliği
+      const smileScale = lerp(0.75, 1.3, prog);
+      rig.mouth.scale.set(smileScale, smileScale, 1);
 
-        ctx.fillStyle = '#05070a';
-        ctx.strokeStyle = '#2ee6b8';
-        ctx.lineWidth = 2.5 * headProj.scale;
-        ctx.shadowColor = '#2ee6b8';
-        ctx.shadowBlur = 10;
+      // 7+ gün seri: 3D altın taç
+      rig.crown.visible = streakRef.current >= 7;
+      if (rig.crown.visible) {
+        rig.crown.rotation.y = time * 0.5;
+      }
 
-        // Sol Cam
-        ctx.beginPath();
-        ctx.roundRect(
-          -glassWidth * 0.52,
-          -glassHeight * 0.45,
-          glassWidth * 0.48,
-          glassHeight,
-          3 * headProj.scale,
-        );
-        ctx.fill();
-        ctx.stroke();
-
-        // Sağ Cam
-        ctx.beginPath();
-        ctx.roundRect(
-          glassWidth * 0.04,
-          -glassHeight * 0.45,
-          glassWidth * 0.48,
-          glassHeight,
-          3 * headProj.scale,
-        );
-        ctx.fill();
-        ctx.stroke();
-
-        // Gözlük Köprüsü
-        ctx.beginPath();
-        ctx.moveTo(-glassWidth * 0.05, -glassHeight * 0.1);
-        ctx.lineTo(glassWidth * 0.05, -glassHeight * 0.1);
-        ctx.stroke();
-
-        // Camlarda 3D Parlama
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.lineWidth = 1.8 * headProj.scale;
-        ctx.beginPath();
-        ctx.moveTo(-glassWidth * 0.42, -glassHeight * 0.25);
-        ctx.lineTo(-glassWidth * 0.22, glassHeight * 0.35);
-        ctx.moveTo(glassWidth * 0.14, -glassHeight * 0.25);
-        ctx.lineTo(glassWidth * 0.34, glassHeight * 0.35);
-        ctx.stroke();
-
-        ctx.restore();
-
-        // Gözlük indikten sonra parlak gülüş
-        if (glassDrop > 0.8) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(
-            headProj.x,
-            headProj.y + 9 * headProj.scale,
-            8 * headProj.scale,
-            0.2 * Math.PI,
-            0.8 * Math.PI,
+      // 3+ gün seri: 3D alev parçacıkları
+      const hasAura = streakRef.current >= 3;
+      emberGroup.visible = hasAura;
+      if (hasAura) {
+        emberMat.color.set(streakRef.current >= 7 ? '#fbbf24' : '#fb923c');
+        for (const e of embers) {
+          const t = time * e.speed + e.phase;
+          const hNorm = (t * 0.45) % 1;
+          e.mesh.position.set(
+            Math.cos(t * 1.8) * e.radius * (1 - hNorm * 0.35),
+            0.2 + hNorm * 1.9,
+            Math.sin(t * 1.8) * e.radius * (1 - hNorm * 0.35),
           );
-          ctx.strokeStyle = '#2ee6b8';
-          ctx.lineWidth = 2 * headProj.scale;
-          ctx.stroke();
-          ctx.restore();
+          const s = Math.sin(hNorm * Math.PI);
+          e.mesh.scale.setScalar(0.6 + s * 0.9);
         }
       }
 
-      animId = requestAnimationFrame(render);
+      // Işık karakteri takip etsin
+      followGlow.position.set(posX, posY + 1.8, 1.6);
+
+      // Kamera hafif fare/parmak eğimini ve nefes salınımını uygulasın
+      currentTilt.current.x += (targetTilt.current.x - currentTilt.current.x) * 0.06;
+      currentTilt.current.y += (targetTilt.current.y - currentTilt.current.y) * 0.06;
+      camPivot.rotation.y = currentTilt.current.y + Math.sin(time * 0.55) * 0.05;
+      camPivot.rotation.x = currentTilt.current.x + Math.cos(time * 0.7) * 0.02;
+
+      renderer.render(scene, camera);
+      animId = requestAnimationFrame(renderFrame);
     };
 
-    render();
+    renderFrame();
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / rect.width - 0.5;
-      const my = (e.clientY - rect.top) / rect.height - 0.5;
-      targetRot.current.y = mx * 0.65;
-      targetRot.current.x = -my * 0.35;
+    const updateTilt = (clientX: number, clientY: number) => {
+      const rect = container.getBoundingClientRect();
+      const nx = (clientX - rect.left) / rect.width - 0.5;
+      const ny = (clientY - rect.top) / rect.height - 0.5;
+      targetTilt.current.y = nx * 0.75;
+      targetTilt.current.x = -ny * 0.32;
     };
 
-    const handleMouseLeave = () => {
-      targetRot.current.x = 0;
-      targetRot.current.y = 0;
+    const handlePointerMove = (e: PointerEvent) => updateTilt(e.clientX, e.clientY);
+    const handlePointerLeave = () => {
+      targetTilt.current.x = 0;
+      targetTilt.current.y = 0;
     };
 
-    canvas.addEventListener('mousemove', handleMouseMove);
-    canvas.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('pointermove', handlePointerMove);
+    container.addEventListener('pointerleave', handlePointerLeave);
 
     return () => {
       cancelAnimationFrame(animId);
-      canvas.removeEventListener('mousemove', handleMouseMove);
-      canvas.removeEventListener('mouseleave', handleMouseLeave);
+      ro.disconnect();
+      container.removeEventListener('pointermove', handlePointerMove);
+      container.removeEventListener('pointerleave', handlePointerLeave);
+      for (const d of rig.disposables) d.dispose();
+      for (const d of stairs.disposables) d.dispose();
+      floorGeo.dispose();
+      floorMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      emberGeo.dispose();
+      emberMat.dispose();
+      renderer.dispose();
     };
   }, []);
 
@@ -637,7 +485,7 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
       >
         <p className="text-[13px] leading-snug">{quotes[quoteIdx % quotes.length]}</p>
         <span className="mt-1 block text-[10px] text-muted-foreground opacity-75">
-          (zıplatmak veya sözü değiştirmek için tıkla)
+          (zıplatmak için dokun · döndürmek için sürükle)
         </span>
 
         <div
@@ -648,12 +496,13 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
         />
       </div>
 
-      {/* 3D Canvas Konteyneri */}
+      {/* Gerçek WebGL 3D Sahne Konteyneri */}
       <div
+        ref={containerRef}
         onClick={handleCanvasClick}
         className={cn(
-          'relative flex size-72 cursor-pointer items-center justify-center rounded-3xl border border-white/[0.08] bg-gradient-to-b from-[#111923]/90 via-[#0a1017]/95 to-[#05080c] p-2 shadow-[0_16px_48px_rgba(0,0,0,0.6)] transition-all duration-500',
-          bounce && 'scale-[1.03]',
+          'relative flex h-[290px] w-full max-w-[340px] cursor-pointer items-center justify-center overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-b from-[#101924]/95 via-[#090f16]/95 to-[#05080c] shadow-[0_16px_48px_rgba(0,0,0,0.65)] transition-all duration-500 sm:h-[310px]',
+          bounce && 'scale-[1.02]',
           isComplete && 'ring-2 ring-primary/60 shadow-[0_0_40px_rgba(46,230,184,0.3)]',
         )}
       >
@@ -661,32 +510,27 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
           className={cn(
             'pointer-events-none absolute inset-0 rounded-3xl transition-opacity duration-1000',
             isComplete
-              ? 'bg-[radial-gradient(ellipse_at_center,rgba(46,230,184,0.28),transparent_70%)] opacity-100'
-              : 'bg-[radial-gradient(ellipse_at_center,rgba(74,222,128,0.1),transparent_70%)] opacity-60',
+              ? 'bg-[radial-gradient(ellipse_at_center,rgba(46,230,184,0.24),transparent_70%)] opacity-100'
+              : 'bg-[radial-gradient(ellipse_at_center,rgba(74,222,128,0.09),transparent_70%)] opacity-70',
           )}
         />
 
         {isComplete && (
           <>
-            <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-primary/50 bg-primary/25 px-2.5 py-1 text-xs font-bold text-primary shadow-[0_0_14px_var(--primary)]">
+            <div className="pointer-events-none absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-primary/50 bg-primary/25 px-2.5 py-1 text-xs font-bold text-primary shadow-[0_0_14px_var(--primary)]">
               <Trophy className="size-3.5" />
               3D BOSS
             </div>
-            <Sparkles className="absolute left-3 top-3 size-5 text-primary/80" />
-            <Sparkles className="absolute bottom-4 right-4 size-4 text-primary/80" />
+            <Sparkles className="pointer-events-none absolute left-3 top-3 z-10 size-5 text-primary/80" />
+            <Sparkles className="pointer-events-none absolute bottom-4 right-4 z-10 size-4 text-primary/80" />
           </>
         )}
 
-        <canvas
-          ref={canvasRef}
-          width={280}
-          height={280}
-          className="size-full drop-shadow-[0_8px_20px_rgba(0,0,0,0.7)]"
-        />
+        <canvas ref={canvasRef} className="size-full touch-none" />
       </div>
 
-      {/* 5 Aşamalı Yavaş İlerleme Yolu (Milestone Stepper) */}
-      <div className="mt-4 w-full max-w-[310px] space-y-2">
+      {/* 5 Aşamalı İlerleme Yolu */}
+      <div className="mt-4 w-full max-w-[320px] space-y-2">
         <div className="relative h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
           <div
             className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-primary to-[#5eead4] shadow-[0_0_12px_var(--primary)] transition-all duration-1000 ease-out"
@@ -696,7 +540,8 @@ export function Stickman3D({ percent, totalGoals, completedGoals, streak = 0, le
 
         <div className="flex items-center justify-between text-[10px]">
           {STAGES.map((stage) => {
-            const reached = displayedPercent >= stage.threshold && (totalGoals > 0 || stage.threshold === 0);
+            const reached =
+              displayedPercent >= stage.threshold && (totalGoals > 0 || stage.threshold === 0);
             return (
               <span
                 key={stage.threshold}
