@@ -27,10 +27,10 @@ export function NowIndicator({ minute, label }: Props) {
           className="absolute flex -translate-x-full items-center font-mono text-[10px] font-semibold leading-none"
           style={{ left: 0 }}
         >
-          <span className="inline-flex items-center rounded-full bg-now px-2 py-0.5 text-[10px] font-bold text-now-contrast shadow-[0_0_12px_var(--now)]">
+          <span className="inline-flex items-center rounded-full bg-now px-1.5 py-0.5 text-[10px] font-bold text-now-contrast shadow-[0_0_12px_var(--now)] sm:px-2">
             {label}
           </span>
-          <span className="h-px w-2.5 bg-now shadow-[0_0_6px_var(--now)]" aria-hidden />
+          <span className="h-px w-1.5 bg-now shadow-[0_0_6px_var(--now)] sm:w-2.5" aria-hidden />
         </span>
         {/* Sol kenar dikey vurgu çentiği */}
         <span

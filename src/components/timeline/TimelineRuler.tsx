@@ -23,8 +23,8 @@ type Props = {
 export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
   return (
     <div
-      className="relative shrink-0 select-none"
-      style={{ width: 'var(--gutter-width)', height: TIMELINE_HEIGHT_PX }}
+      className="relative w-[54px] shrink-0 select-none sm:w-[var(--gutter-width)]"
+      style={{ height: TIMELINE_HEIGHT_PX }}
       aria-hidden
     >
       {HOURS.map((hour) => {
@@ -38,7 +38,7 @@ export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
             {/* Saat rakamı — çizginin üstüne oturur, ilk saat dışarı taşmaz. */}
             <span
               className={cn(
-                'absolute right-3 font-mono text-[11px] tabular-nums transition-opacity duration-200',
+                'absolute right-2.5 font-mono text-[11px] tabular-nums transition-opacity duration-200 sm:right-3',
                 isActive
                   ? 'font-semibold text-foreground'
                   : 'text-muted-foreground/70',
@@ -52,13 +52,19 @@ export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
               {String(hour).padStart(2, '0')}:00
             </span>
 
-            {/* Saat çentiği */}
+            {/* Saat başı çentiği */}
             <span
               className={cn(
                 'absolute right-0 h-px',
-                isActive ? 'bg-primary/60' : 'bg-white/[0.06]',
+                isActive ? 'bg-primary/60' : 'bg-white/[0.08]',
               )}
               style={{ top, width: 6 }}
+            />
+
+            {/* Yarım saat (:30) ince cetvel çentiği — yazısız, göz hizalaması için */}
+            <span
+              className="absolute right-0 h-px bg-white/[0.04]"
+              style={{ top: top + HOUR_HEIGHT_PX / 2, width: 3.5 }}
             />
           </div>
         );
