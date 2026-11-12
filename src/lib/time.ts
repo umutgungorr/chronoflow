@@ -56,18 +56,35 @@ export function clampStart(startMinutes: number, durationMinutes: number): numbe
 /* -------------------------------------------------------------------------- */
 
 /** Dakika -> ızgaranın üstünden itibaren piksel ofseti. */
-export function minutesToY(minutes: number): number {
-  return (minutes - DAY_START_MINUTE) * PX_PER_MINUTE;
+export function minutesToY(
+  minutes: number,
+  originMinute: number = DAY_START_MINUTE,
+): number {
+  return (minutes - originMinute) * PX_PER_MINUTE;
+}
+
+/** Süre (dk) -> ızgara piksel yüksekliği. */
+export function durationToPx(minutes: number): number {
+  return minutes * PX_PER_MINUTE;
 }
 
 /** Piksel ofseti -> dakika (ham, snap'lenmemiş). */
-export function yToMinutes(y: number): number {
-  return DAY_START_MINUTE + y / PX_PER_MINUTE;
+export function yToMinutes(
+  y: number,
+  originMinute: number = DAY_START_MINUTE,
+): number {
+  return originMinute + y / PX_PER_MINUTE;
 }
 
 /** Piksel ofseti -> en yakın 15 dakikalık dilime yapıştırılmış dakika. */
-export function yToSnappedMinutes(y: number): number {
-  return clampToDay(snapMinutes(yToMinutes(y)));
+export function yToSnappedMinutes(
+  y: number,
+  originMinute: number = DAY_START_MINUTE,
+): number {
+  return Math.min(
+    DAY_END_MINUTE,
+    Math.max(originMinute, snapMinutes(yToMinutes(y, originMinute))),
+  );
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,14 +1,18 @@
 'use client';
 
+import { useMemo } from 'react';
+
 import {
+  DAY_END_MINUTE,
+  DAY_START_MINUTE,
   HOUR_HEIGHT_PX,
-  TIMELINE_HEIGHT_PX,
 } from '@/lib/constants';
+import { durationToPx } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
 type Props = {
+  /** Takvimin başladığı saat (0-18). */
+  startHour?: number;
   /** Şu anın içinde bulunduğu saat (0-23) — rakamı vurgulamak için. */
   activeHour: number | null;
   /** "Şimdi" rozeti bu saate yakınsa etiket gizlenir ki rozetle üst üste binmesin. */
@@ -20,15 +24,25 @@ type Props = {
  *
  * Saat etiketlerini `09:00`, `10:00` biçiminde sade ve okunaklı gösterir.
  */
-export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
+export function TimelineRuler({
+  startHour = DAY_START_MINUTE / 60,
+  activeHour,
+  nowMinute = null,
+}: Props) {
+  const hours = useMemo(
+    () => Array.from({ length: 24 - startHour }, (_, i) => startHour + i),
+    [startHour],
+  );
+  const heightPx = durationToPx(DAY_END_MINUTE - startHour * 60);
+
   return (
     <div
       className="relative w-[54px] shrink-0 select-none sm:w-[var(--gutter-width)]"
-      style={{ height: TIMELINE_HEIGHT_PX }}
+      style={{ height: heightPx }}
       aria-hidden
     >
-      {HOURS.map((hour) => {
-        const top = hour * HOUR_HEIGHT_PX;
+      {hours.map((hour) => {
+        const top = (hour - startHour) * HOUR_HEIGHT_PX;
         const isActive = activeHour === hour;
         const collidesWithNow =
           nowMinute !== null && Math.abs(hour * 60 - nowMinute) <= 14;
@@ -46,7 +60,7 @@ export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
               )}
               style={{
                 top,
-                transform: hour === 0 ? 'translateY(2px)' : 'translateY(-50%)',
+                transform: hour === startHour ? 'translateY(2px)' : 'translateY(-50%)',
               }}
             >
               {String(hour).padStart(2, '0')}:00

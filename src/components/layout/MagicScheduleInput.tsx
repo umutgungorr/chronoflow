@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, Search, Sparkles } from 'lucide-react';
+import { Clock, Loader2, Search, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { postAi } from '@/lib/ai-client';
+import { MAX_DAY_START_HOUR } from '@/lib/constants';
 import { sanitizeScheduleItems, type ScheduleItem } from '@/lib/magic-schedule';
 import { useTaskStore } from '@/store/useTaskStore';
 
 const EXAMPLE = 'Örn: 2 saat kod, 1 saat spor';
+const DAY_START_HOURS = Array.from({ length: MAX_DAY_START_HOUR + 1 }, (_, i) => i);
 
 /**
  * "Günüme Dağıt" girdisi.
@@ -22,6 +24,8 @@ const EXAMPLE = 'Örn: 2 saat kod, 1 saat spor';
 export function MagicScheduleInput() {
   const applyMagicSchedule = useTaskStore((s) => s.applyMagicSchedule);
   const applyScheduleItems = useTaskStore((s) => s.applyScheduleItems);
+  const dayStartHour = useTaskStore((s) => s.dayStartHour);
+  const setDayStartHour = useTaskStore((s) => s.setDayStartHour);
   const [text, setText] = useState('');
   const [withBuffers, setWithBuffers] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -75,14 +79,33 @@ export function MagicScheduleInput() {
         </Button>
       </form>
 
-      <label className="flex w-fit cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
-        <Checkbox
-          checked={withBuffers}
-          onCheckedChange={(checked) => setWithBuffers(checked === true)}
-          className="size-3.5"
-        />
-        Blokların arasına 15dk tampon koy
-      </label>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-[11px] text-muted-foreground">
+          <Checkbox
+            checked={withBuffers}
+            onCheckedChange={(checked) => setWithBuffers(checked === true)}
+            className="size-3.5"
+          />
+          Blokların arasına 15dk tampon koy
+        </label>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Clock className="size-3 text-primary/80" aria-hidden />
+          <span>Günü başlat:</span>
+          <select
+            aria-label="Günün başlangıç saati"
+            value={dayStartHour}
+            onChange={(event) => setDayStartHour(Number(event.target.value))}
+            className="h-6 cursor-pointer rounded-md border border-white/[0.1] bg-[#0b1117] px-1.5 font-mono text-[11px] font-medium text-foreground outline-none transition-colors hover:border-primary/40 focus-visible:border-primary"
+          >
+            {DAY_START_HOURS.map((hour) => (
+              <option key={hour} value={hour} className="bg-[#0b1117] text-foreground">
+                {String(hour).padStart(2, '0')}:00
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </div>
   );
 }

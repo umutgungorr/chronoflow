@@ -19,7 +19,7 @@ import { SlotInteractionLayer } from '@/components/timeline/SlotInteractionLayer
 import { TaskBlock } from '@/components/timeline/TaskBlock';
 import { TimelineRuler } from '@/components/timeline/TimelineRuler';
 import { useCurrentMinute } from '@/hooks/use-current-minute';
-import { GUTTER_WIDTH_PX, PX_PER_MINUTE, TIMELINE_HEIGHT_PX } from '@/lib/constants';
+import { DAY_END_MINUTE, GUTTER_WIDTH_PX, PX_PER_MINUTE } from '@/lib/constants';
 import {
   applyDragPreview,
   layoutOverlaps,
@@ -27,7 +27,14 @@ import {
   type DragPreview,
 } from '@/lib/layout';
 import { getAvailableDuration } from '@/lib/scheduler';
-import { formatTime, fromDayMinutes, minutesToY, snapMinutes } from '@/lib/time';
+import {
+  durationToPx,
+  formatTime,
+  fromDayMinutes,
+  getStartMinutes,
+  minutesToY,
+  snapMinutes,
+} from '@/lib/time';
 import { useTaskStore, useTasksForSelectedDay } from '@/store/useTaskStore';
 
 /** Sayfa açıldığında "şimdi" çizgisinin üstünde bırakılacak boşluk. */
@@ -47,6 +54,7 @@ export function TimelineGrid() {
 
   const tasks = useTasksForSelectedDay();
   const day = useTaskStore((s) => s.selectedDate);
+  const dayStartHour = useTaskStore((s) => s.dayStartHour);
   const allTasks = useTaskStore((s) => s.tasks);
   const selectedTaskId = useTaskStore((s) => s.selectedTaskId);
   const selectTask = useTaskStore((s) => s.selectTask);
@@ -96,11 +104,25 @@ export function TimelineGrid() {
    * aynı tick içinde birden çok commit gelir; kapanıştaki liste bayat
    * olduğu için hepsi aynı başlangıcı hesaplar ve yalnızca son adım işlerdi.
    */
+  // Eğer gün içinde seçilen başlangıç saatinden daha erken bir blok varsa,
+  // bloğun üstten kesilmemesi için cetvel o saate kadar kendiliğinden açılır.
+  const startHour = useMemo(() => {
+    if (tasks.length === 0) return dayStartHour;
+    const earliestHour = Math.min(...tasks.map((t) => Math.floor(getStartMinutes(t) / 60)));
+    return Math.max(0, Math.min(dayStartHour, earliestHour));
+  }, [dayStartHour, tasks]);
+  const startMinute = startHour * 60;
+  const timelineHeightPx = durationToPx(DAY_END_MINUTE - startMinute);
+
   const commit = (taskId: string, mode: DragMode, deltaMinutes: number) => {
     const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    const { start, duration } = applyDragPreview(task, { taskId, mode, deltaMinutes });
+    const { start, duration } = applyDragPreview(
+      task,
+      { taskId, mode, deltaMinutes },
+      startMinute,
+    );
 
     if (mode === 'move') moveTask(taskId, start);
     else if (mode === 'resize-end') resizeTask(taskId, 'end', start + duration);
@@ -160,13 +182,14 @@ export function TimelineGrid() {
     const today = isToday(day);
     if (today && nowMinute === null) return;
 
-    const key = day.toDateString();
+    const key = `${day.toDateString()}|${startHour}`;
     if (positionedFor.current === key) return;
     positionedFor.current = key;
 
-    const anchor = today && nowMinute !== null ? nowMinute : 7 * 60;
-    node.scrollTop = Math.max(0, minutesToY(anchor) - SCROLL_LEAD_PX);
-  }, [day, nowMinute]);
+    const anchor =
+      today && nowMinute !== null ? Math.max(startMinute, nowMinute) : startMinute;
+    node.scrollTop = Math.max(0, minutesToY(anchor, startMinute) - SCROLL_LEAD_PX);
+  }, [day, nowMinute, startHour, startMinute]);
 
   // Çakışan bloklar yan yana dizilir (sabit görev zinciri kırınca oluşur).
   const laidOut = useMemo(() => layoutOverlaps(tasks), [tasks]);
@@ -177,18 +200,20 @@ export function TimelineGrid() {
       className="scrollbar-quiet relative flex-1 overflow-y-auto overscroll-contain rounded-xl border bg-canvas"
       style={{ ['--gutter-width' as string]: `${GUTTER_WIDTH_PX}px` }}
     >
-      <div className="relative flex" style={{ height: TIMELINE_HEIGHT_PX }}>
+      <div className="relative flex" style={{ height: timelineHeightPx }}>
         <TimelineRuler
+          startHour={startHour}
           activeHour={showNow ? Math.floor(nowMinute / 60) : null}
           nowMinute={showNow ? nowMinute : null}
         />
 
         {/* Tuval: tüm katmanlar buraya, aynı koordinat sistemine yığılır. */}
         <div className="relative flex-1 border-l">
-          <GridLines />
+          <GridLines startMinute={startMinute} />
 
           <SlotInteractionLayer
             day={day}
+            startMinute={startMinute}
             disabled={preview !== null}
             getDuration={(start) => getAvailableDuration(allTasks, day, start, 60)}
             // Boş dilime tıklamak bloğu HEMEN oluşturmaz; saat/süre ön dolu
@@ -201,7 +226,7 @@ export function TimelineGrid() {
           {tasks.length === 0 && (
             <p
               className="pointer-events-none absolute inset-x-0 z-10 text-center text-sm text-muted-foreground"
-              style={{ top: minutesToY(10 * 60) }}
+              style={{ top: minutesToY(Math.max(startMinute + 60, 10 * 60), startMinute) }}
             >
               Gün boş. Bir saate tıkla, ilk bloğunu koy.
             </p>
@@ -241,6 +266,7 @@ export function TimelineGrid() {
                   key={task.id}
                   task={task}
                   day={day}
+                  startMinute={startMinute}
                   lane={lane}
                   laneCount={laneCount}
                   isSelected={task.id === selectedTaskId}
@@ -258,6 +284,7 @@ export function TimelineGrid() {
           {showNow && (
             <NowIndicator
               minute={nowMinute}
+              startMinute={startMinute}
               label={formatTime(fromDayMinutes(day, nowMinute))}
             />
           )}

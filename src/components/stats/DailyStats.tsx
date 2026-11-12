@@ -31,6 +31,7 @@ export function DailyStats({ onNavigate }: Props = {}) {
   const tasks = useTasksForSelectedDay();
   const allTasks = useTaskStore((s) => s.tasks);
   const day = useTaskStore((s) => s.selectedDate);
+  const dayStartHour = useTaskStore((s) => s.dayStartHour);
   const openCreateEditor = useTaskStore((s) => s.openCreateEditor);
   const setDayToolsOpen = useDayToolsStore((s) => s.setOpen);
 
@@ -58,9 +59,13 @@ export function DailyStats({ onNavigate }: Props = {}) {
   const progressLength = (completionRate / 100) * RING_CIRCUMFERENCE;
 
   const handleQuickAdd = () => {
-    const from = isToday(day) ? toDayMinutes(new Date()) : 9 * 60;
+    const preferredStart = dayStartHour * 60;
+    const from = isToday(day)
+      ? Math.max(preferredStart, toDayMinutes(new Date()))
+      : preferredStart;
     const slot =
       findFreeSlots(allTasks, day, { from, minDuration: 30 })[0] ??
+      findFreeSlots(allTasks, day, { from: preferredStart, minDuration: 30 })[0] ??
       findFreeSlots(allTasks, day, { minDuration: 30 })[0];
     const start = slot ? slot.start : from;
     openCreateEditor(start, getAvailableDuration(allTasks, day, start, 60));

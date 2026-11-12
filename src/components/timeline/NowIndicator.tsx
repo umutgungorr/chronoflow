@@ -1,11 +1,14 @@
 'use client';
 
+import { DAY_END_MINUTE, DAY_START_MINUTE } from '@/lib/constants';
 import { minutesToY } from '@/lib/time';
 
 type Props = {
   /** Gün içi dakika. */
   minute: number;
   label: string;
+  /** Takvimin başlangıç dakikası. */
+  startMinute?: number;
 };
 
 /**
@@ -14,11 +17,17 @@ type Props = {
  * Dakika ilerledikçe `transition-[top]` ile takvim üzerinde akıcı
  * şekilde aşağı kayar; takılıp donmaz.
  */
-export function NowIndicator({ minute, label }: Props) {
+export function NowIndicator({
+  minute,
+  label,
+  startMinute = DAY_START_MINUTE,
+}: Props) {
+  if (minute < startMinute || minute > DAY_END_MINUTE) return null;
+
   return (
     <div
       className="pointer-events-none absolute inset-x-0 z-30 transition-[top] duration-500 ease-out"
-      style={{ top: minutesToY(minute) }}
+      style={{ top: minutesToY(minute, startMinute) }}
       aria-label={`Şu an ${label}`}
     >
       <div className="relative flex items-center">

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { GUN, gorev, harita } from '@/lib/test-utils';
+import { getStartMinutes } from '@/lib/time';
 import { useTaskStore } from '@/store/useTaskStore';
 
 /** Her testten önce store'u bilinen bir başlangıca çeker. */
@@ -238,5 +239,22 @@ describe('gün devri', () => {
     useTaskStore.getState().rolloverToToday(new Date(2026, 7, 16, 14, 37));
     expect(gun().getHours()).toBe(0);
     expect(gun().getMinutes()).toBe(0);
+  });
+});
+
+describe('gün başlangıç saati', () => {
+  it('saati 0-18 aralığında sınırlar ve dağıtımı o saatten başlatır', () => {
+    kur([]);
+    useTaskStore.getState().setDayStartHour(25);
+    expect(useTaskStore.getState().dayStartHour).toBe(18);
+
+    useTaskStore.getState().setDayStartHour(-3);
+    expect(useTaskStore.getState().dayStartHour).toBe(0);
+
+    useTaskStore.getState().setDayStartHour(9);
+    expect(useTaskStore.getState().dayStartHour).toBe(9);
+
+    useTaskStore.getState().applyMagicSchedule('2 saat kod', { withBuffers: false });
+    expect(getStartMinutes(gorevler()[0]!)).toBe(9 * 60);
   });
 });

@@ -6,8 +6,8 @@
  * "gözünle gördüğün yer" ile "kaydedilen yer" asla ayrışmaz.
  */
 
-import { DAY_END_MINUTE, MIN_TASK_MINUTES } from '@/lib/constants';
-import { clampStart, getDurationMinutes, getEndMinutes, getStartMinutes } from '@/lib/time';
+import { DAY_END_MINUTE, DAY_START_MINUTE, MIN_TASK_MINUTES } from '@/lib/constants';
+import { getDurationMinutes, getEndMinutes, getStartMinutes } from '@/lib/time';
 import type { Task } from '@/types';
 
 /* -------------------------------------------------------------------------- */
@@ -35,7 +35,11 @@ export type Placement = {
  * `preview` yoksa görevin kendi yerleşimi döner; bu sayede çağıran taraf
  * "sürükleniyor mu?" diye dallanmak zorunda kalmaz.
  */
-export function applyDragPreview(task: Task, preview: DragPreview | null): Placement {
+export function applyDragPreview(
+  task: Task,
+  preview: DragPreview | null,
+  minStart: number = DAY_START_MINUTE,
+): Placement {
   const start = getStartMinutes(task);
   const duration = getDurationMinutes(task);
 
@@ -48,7 +52,10 @@ export function applyDragPreview(task: Task, preview: DragPreview | null): Place
   switch (preview.mode) {
     case 'move':
       // Taşımada süre korunur; yalnızca başlangıç kayar ve gün dışına taşamaz.
-      return { start: clampStart(start + delta, duration), duration };
+      return {
+        start: Math.min(Math.max(minStart, start + delta), DAY_END_MINUTE - duration),
+        duration,
+      };
 
     case 'resize-end': {
       // Alt kenar: başlangıç sabit, süre değişir. En az 15dk, en fazla gün sonu.
@@ -62,7 +69,7 @@ export function applyDragPreview(task: Task, preview: DragPreview | null): Place
     case 'resize-start': {
       // Üst kenar: BİTİŞ sabit kalır, başlangıç kayar → süre ters yönde değişir.
       const end = start + duration;
-      const nextStart = Math.max(0, Math.min(start + delta, end - MIN_TASK_MINUTES));
+      const nextStart = Math.max(minStart, Math.min(start + delta, end - MIN_TASK_MINUTES));
       return { start: nextStart, duration: end - nextStart };
     }
   }

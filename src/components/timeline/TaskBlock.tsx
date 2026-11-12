@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
+import { DAY_START_MINUTE } from '@/lib/constants';
 import { applyDragPreview, type DragMode, type DragPreview } from '@/lib/layout';
 import {
+  durationToPx,
   formatDuration,
   formatRange,
   formatTime,
@@ -59,6 +61,7 @@ function renderTaskIcon(task: Task) {
 type Props = {
   task: Task;
   day: Date;
+  startMinute?: number;
   lane: number;
   laneCount: number;
   isSelected: boolean;
@@ -76,6 +79,7 @@ type Props = {
 export function TaskBlock({
   task,
   day,
+  startMinute = DAY_START_MINUTE,
   lane,
   laneCount,
   isSelected,
@@ -95,9 +99,9 @@ export function TaskBlock({
    * blok, önizlenen dakikaya birebir denk gelen piksele yerleşir. Ekranda
    * gördüğün yer ile bırakınca kaydedilecek yer aynı olur.
    */
-  const { start, duration } = applyDragPreview(task, preview);
-  const top = minutesToY(start);
-  const height = minutesToY(duration);
+  const { start, duration } = applyDragPreview(task, preview, startMinute);
+  const top = minutesToY(start, startMinute);
+  const height = durationToPx(duration);
 
   // Gövde: taşıma tutamacı. Tutamaçlar KARDEŞ elemanlar — iç içe olsalardı
   // pointerdown olayı iki sensörü birden tetiklerdi.

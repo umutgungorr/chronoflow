@@ -28,6 +28,7 @@ export function AppHeader() {
   const tasks = useTasksForSelectedDay();
   const allTasks = useTaskStore((s) => s.tasks);
   const day = useTaskStore((s) => s.selectedDate);
+  const dayStartHour = useTaskStore((s) => s.dayStartHour);
   const goToPrevDay = useTaskStore((s) => s.goToPrevDay);
   const goToNextDay = useTaskStore((s) => s.goToNextDay);
   const goToToday = useTaskStore((s) => s.goToToday);
@@ -41,9 +42,13 @@ export function AppHeader() {
 
   /** İlk uygun boşlukla yeni blok penceresini açar. */
   const openEditorAtNextFreeSlot = () => {
-    const from = isToday(day) ? toDayMinutes(new Date()) : 9 * 60;
+    const preferredStart = dayStartHour * 60;
+    const from = isToday(day)
+      ? Math.max(preferredStart, toDayMinutes(new Date()))
+      : preferredStart;
     const slot =
       findFreeSlots(allTasks, day, { from, minDuration: 30 })[0] ??
+      findFreeSlots(allTasks, day, { from: preferredStart, minDuration: 30 })[0] ??
       findFreeSlots(allTasks, day, { minDuration: 30 })[0];
     const start = slot ? slot.start : from;
     openCreateEditor(start, getAvailableDuration(allTasks, day, start, 60));

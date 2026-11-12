@@ -7,6 +7,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   DAY_END_MINUTE,
+  DEFAULT_DAY_START_HOUR,
+  MAX_DAY_START_HOUR,
   MIN_TASK_MINUTES,
   STORAGE_KEY,
 } from '@/lib/constants';
@@ -103,6 +105,8 @@ type TaskState = {
   routines: Routine[];
   /** Hangi güne hangi rutinler işlendi (dayKey → rutin id'leri). Yerel. */
   routineApplied: Record<string, string[]>;
+  /** Takvimin günlük görünümünde kaçta başlayacağı (0-18 arası saat). */
+  dayStartHour: number;
   /** Rutinlerin tamamlanma kayıtları (dayKey → routineId[]). */
   routineCompleted: Record<string, string[]>;
 };
@@ -118,6 +122,7 @@ export type HistoryEntry = {
 type TaskActions = {
   /* — Gün gezinme — */
   setSelectedDate: (date: Date) => void;
+  setDayStartHour: (hour: number) => void;
   goToPrevDay: () => void;
   goToNextDay: () => void;
   goToToday: () => void;
@@ -287,10 +292,15 @@ export const useTaskStore = create<TaskStore>()(
       subtasks: {},
       routines: [],
       routineApplied: {},
+      dayStartHour: DEFAULT_DAY_START_HOUR,
       routineCompleted: {},
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
+      setDayStartHour: (hour) =>
+        set({
+          dayStartHour: Math.max(0, Math.min(MAX_DAY_START_HOUR, Math.round(hour))),
+        }),
       goToPrevDay: () => set((s) => ({ selectedDate: addDays(s.selectedDate, -1) })),
       goToNextDay: () => set((s) => ({ selectedDate: addDays(s.selectedDate, 1) })),
       goToToday: () => set({ selectedDate: startOfDay(new Date()) }),
@@ -443,8 +453,11 @@ export const useTaskStore = create<TaskStore>()(
         if (items.length === 0) return { placed: 0, skipped: 0 };
 
         const day = state.selectedDate;
-        // Bugün planlanıyorsa geçmiş saatlere blok koymayız.
-        const from = isToday(day) ? snapMinutes(toDayMinutes(new Date())) : 8 * 60;
+        const preferredStart = state.dayStartHour * 60;
+        // Bugün planlanıyorsa geçmiş saatlere blok koymayız; günü başlatma saatinden önceye de taşmayız.
+        const from = isToday(day)
+          ? Math.max(preferredStart, snapMinutes(toDayMinutes(new Date())))
+          : preferredStart;
 
         const { blocks, skipped } = planIntoDay(state.tasks, day, items, {
           from: clampStart(from, MIN_TASK_MINUTES),
@@ -485,9 +498,11 @@ export const useTaskStore = create<TaskStore>()(
       addGoalBlock: (title) => {
         const state = get();
         const today = startOfDay(new Date());
-        const from = snapMinutes(toDayMinutes(new Date()));
+        const preferredStart = state.dayStartHour * 60;
+        const from = Math.max(preferredStart, snapMinutes(toDayMinutes(new Date())));
         const slot =
           findFreeSlots(state.tasks, today, { from, minDuration: 60 })[0] ??
+          findFreeSlots(state.tasks, today, { from: preferredStart, minDuration: 60 })[0] ??
           findFreeSlots(state.tasks, today, { minDuration: 60 })[0];
 
         if (!slot) {
@@ -835,6 +850,7 @@ export const useTaskStore = create<TaskStore>()(
         subtasks: state.subtasks,
         routines: state.routines,
         routineApplied: state.routineApplied,
+        dayStartHour: state.dayStartHour,
       }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).

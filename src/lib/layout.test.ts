@@ -87,6 +87,18 @@ describe('applyDragPreview', () => {
       duration: 60,
     });
   });
+
+  it('özel gün başlangıcı verilince taşıma ve üstten kısaltma o saati aşmaz', () => {
+    const gec = gorev('gec', '10:00', 60);
+    expect(applyDragPreview(gec, onizleme('gec', 'move', -120), 9 * 60)).toEqual({
+      start: 540,
+      duration: 60,
+    });
+    expect(applyDragPreview(gec, onizleme('gec', 'resize-start', -120), 9 * 60)).toEqual({
+      start: 540,
+      duration: 120,
+    });
+  });
 });
 
 describe('layoutOverlaps', () => {

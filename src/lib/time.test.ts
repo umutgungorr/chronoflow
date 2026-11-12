@@ -4,6 +4,7 @@ import { PX_PER_MINUTE, SLOT_HEIGHT_PX } from '@/lib/constants';
 import {
   clampStart,
   clampToDay,
+  durationToPx,
   formatDuration,
   formatRange,
   fromDayMinutes,
@@ -69,6 +70,16 @@ describe('piksel ↔ dakika', () => {
     expect(yToSnappedMinutes(minutesToY(548))).toBe(555); // 09:08 → 09:15
     expect(yToSnappedMinutes(-500)).toBe(0);
     expect(yToSnappedMinutes(999999)).toBe(1440);
+  });
+
+  it('özel gün başlangıcı (ör. 09:00) için ofset ve süre matematiği doğrudur', () => {
+    const start09 = 9 * 60;
+    expect(minutesToY(start09, start09)).toBe(0);
+    expect(minutesToY(10 * 60, start09)).toBe(SLOT_HEIGHT_PX * 4);
+    expect(durationToPx(60)).toBe(SLOT_HEIGHT_PX * 4);
+    expect(yToMinutes(0, start09)).toBe(start09);
+    expect(yToSnappedMinutes(-100, start09)).toBe(start09);
+    expect(yToSnappedMinutes(minutesToY(608, start09), start09)).toBe(615);
   });
 });
 

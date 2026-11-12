@@ -21,6 +21,12 @@ export const PX_PER_MINUTE = SLOT_HEIGHT_PX / SLOT_MINUTES;
 /** Gün 00:00'da başlar (gece yarısından itibaren dakika). */
 export const DAY_START_MINUTE = 0;
 
+/** Kullanıcının seçebileceği varsayılan gün başlangıç saati (08:00). */
+export const DEFAULT_DAY_START_HOUR = 8;
+
+/** Gün başlangıcı seçicisinin üst sınırı (18:00). */
+export const MAX_DAY_START_HOUR = 18;
+
 /** Gün 24:00'te biter. */
 export const DAY_END_MINUTE = 24 * 60;
 
