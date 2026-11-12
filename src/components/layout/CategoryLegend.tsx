@@ -19,7 +19,7 @@ export function CategoryLegend() {
   const geriAlinabilir = useTaskStore((s) => s.history.length > 0);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-3">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-2.5">
       <ul className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
         {CATEGORY_LIST.map((meta) => (
           <li
@@ -39,7 +39,7 @@ export function CategoryLegend() {
         ))}
       </ul>
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
         <SyncStatus />
         <Button
           variant="ghost"

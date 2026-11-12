@@ -45,8 +45,11 @@ export function SlotInteractionLayer({ day, disabled, getDuration, onCreate }: P
       className="absolute inset-0 z-0"
       onPointerMove={handleMove}
       onPointerLeave={() => setHoverMinute(null)}
-      onClick={() => {
-        if (hoverMinute !== null && hoverMinute < DAY_END_MINUTE) onCreate(hoverMinute);
+      onClick={(event) => {
+        const minute =
+          hoverMinute ??
+          yToSnappedMinutes(event.clientY - event.currentTarget.getBoundingClientRect().top);
+        if (minute < DAY_END_MINUTE) onCreate(minute);
       }}
     >
       {isVisible && (

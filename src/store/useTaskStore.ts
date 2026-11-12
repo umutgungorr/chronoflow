@@ -368,8 +368,9 @@ export const useTaskStore = create<TaskStore>()(
         if (!task) return;
 
         const duration = getDurationMinutes(task);
-        // 1) 15dk dilimine yapıştır, 2) gün sınırları içinde tut.
-        const nextStart = clampStart(snapMinutes(startMinutes), duration);
+        // Sürükleme katmanı zaten 15dk adımı uygular; mutlak dakikayı zorla
+        // yuvarlamıyoruz ki kullanıcının 09:47 gibi tam dakikalı blokları bozulmasın.
+        const nextStart = clampStart(Math.round(startMinutes), duration);
         if (nextStart === getStartMinutes(task)) return;
 
         const moved = state.tasks.map((t) =>
@@ -389,7 +390,7 @@ export const useTaskStore = create<TaskStore>()(
         const task = state.tasks.find((t) => t.id === id);
         if (!task) return;
 
-        const snapped = snapMinutes(minute);
+        const targetMinute = Math.round(minute);
         const start = getStartMinutes(task);
         const end = start + getDurationMinutes(task);
 
@@ -398,12 +399,12 @@ export const useTaskStore = create<TaskStore>()(
           // Alt kenar: bitiş en az 15dk başlangıçtan sonra olmalı.
           const nextEnd = Math.min(
             DAY_END_MINUTE,
-            Math.max(start + MIN_TASK_MINUTES, snapped),
+            Math.max(start + MIN_TASK_MINUTES, targetMinute),
           );
           next = withDuration(task, nextEnd - start);
         } else {
           // Üst kenar: başlangıç kayar, bitiş sabit kalır.
-          const nextStart = Math.max(0, Math.min(snapped, end - MIN_TASK_MINUTES));
+          const nextStart = Math.max(0, Math.min(targetMinute, end - MIN_TASK_MINUTES));
           next = {
             ...task,
             startTime: fromDayMinutes(task.startTime, nextStart),

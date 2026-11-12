@@ -178,7 +178,10 @@ export function TimelineGrid() {
       style={{ ['--gutter-width' as string]: `${GUTTER_WIDTH_PX}px` }}
     >
       <div className="relative flex" style={{ height: TIMELINE_HEIGHT_PX }}>
-        <TimelineRuler activeHour={showNow ? Math.floor(nowMinute / 60) : null} />
+        <TimelineRuler
+          activeHour={showNow ? Math.floor(nowMinute / 60) : null}
+          nowMinute={showNow ? nowMinute : null}
+        />
 
         {/* Tuval: tüm katmanlar buraya, aynı koordinat sistemine yığılır. */}
         <div className="relative flex-1 border-l">

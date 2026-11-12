@@ -11,6 +11,8 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 type Props = {
   /** Şu anın içinde bulunduğu saat (0-23) — rakamı vurgulamak için. */
   activeHour: number | null;
+  /** "Şimdi" rozeti bu saate yakınsa etiket gizlenir ki rozetle üst üste binmesin. */
+  nowMinute?: number | null;
 };
 
 /**
@@ -18,7 +20,7 @@ type Props = {
  *
  * Saat etiketlerini `09:00`, `10:00` biçiminde sade ve okunaklı gösterir.
  */
-export function TimelineRuler({ activeHour }: Props) {
+export function TimelineRuler({ activeHour, nowMinute = null }: Props) {
   return (
     <div
       className="relative shrink-0 select-none"
@@ -28,16 +30,19 @@ export function TimelineRuler({ activeHour }: Props) {
       {HOURS.map((hour) => {
         const top = hour * HOUR_HEIGHT_PX;
         const isActive = activeHour === hour;
+        const collidesWithNow =
+          nowMinute !== null && Math.abs(hour * 60 - nowMinute) <= 14;
 
         return (
           <div key={hour}>
             {/* Saat rakamı — çizginin üstüne oturur, ilk saat dışarı taşmaz. */}
             <span
               className={cn(
-                'absolute right-3 font-mono text-[11px] tabular-nums transition-colors',
+                'absolute right-3 font-mono text-[11px] tabular-nums transition-opacity duration-200',
                 isActive
                   ? 'font-semibold text-foreground'
                   : 'text-muted-foreground/70',
+                collidesWithNow && 'opacity-0',
               )}
               style={{
                 top,

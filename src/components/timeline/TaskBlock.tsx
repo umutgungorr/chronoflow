@@ -8,6 +8,7 @@ import {
   Dumbbell,
   Laptop,
   Lock,
+  Pencil,
   RefreshCw,
   Users,
   Zap,
@@ -156,7 +157,7 @@ export function TaskBlock({
         width: `calc(${laneWidth}% - 4px)`,
       }}
       className={cn(
-        'pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl border text-left backdrop-blur-sm transition-all',
+        'group/block pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl border text-left backdrop-blur-sm transition-all',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
         isBuffer
           ? 'border-dashed border-white/10 bg-[#0d141b]/70'
@@ -251,30 +252,50 @@ export function TaskBlock({
           </div>
         </div>
 
-        {/* Sağdaki yuvarlak tamamlandı düğmesi */}
-        {!isBuffer && onToggleComplete && (
+        {/* Sağdaki düzenle + yuvarlak tamamlandı düğmeleri */}
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              onToggleComplete(task.id);
+              onOpen(task.id);
             }}
-            aria-label={
-              task.isCompleted
-                ? `${task.title} tamamlandı işaretini kaldır`
-                : `${task.title} tamamlandı olarak işaretle`
-            }
+            aria-label={`${task.title} bloğunu düzenle`}
             className={cn(
-              'flex size-6 shrink-0 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              task.isCompleted
-                ? 'border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(46,230,184,0.3)]'
-                : 'border-white/20 bg-transparent text-transparent hover:border-primary/60 hover:text-primary/40',
+              'flex size-6 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-muted-foreground transition-all hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              isSelected
+                ? 'opacity-100'
+                : 'pointer-events-none opacity-0 group-hover/block:pointer-events-auto group-hover/block:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
             )}
           >
-            <Check className="size-3.5 stroke-[2.5]" />
+            <Pencil className="size-3" />
           </button>
-        )}
+
+          {!isBuffer && onToggleComplete && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleComplete(task.id);
+              }}
+              aria-label={
+                task.isCompleted
+                  ? `${task.title} tamamlandı işaretini kaldır`
+                  : `${task.title} tamamlandı olarak işaretle`
+              }
+              className={cn(
+                'flex size-6 shrink-0 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                task.isCompleted
+                  ? 'border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(46,230,184,0.3)]'
+                  : 'border-white/20 bg-transparent text-transparent hover:border-primary/60 hover:text-primary/40',
+              )}
+            >
+              <Check className="size-3.5 stroke-[2.5]" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Alt tutamaç: süreyi uzatır/kısaltır. Üzerine gelince belirginleşir. */}

@@ -24,7 +24,6 @@ import {
   fromDayMinutes,
   getDurationMinutes,
   getStartMinutes,
-  snapMinutes,
 } from '@/lib/time';
 import { useTaskStore } from '@/store/useTaskStore';
 import type { TaskCategory } from '@/types';
@@ -132,20 +131,26 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
     setForm((current) => ({ ...current, ...changes }));
 
   /** Başlangıç değişince süre korunur — takvim uygulamalarının beklenen davranışı. */
-  const handleStartChange = (value: string) => {
-    const minutes = fromTimeValue(value);
-    if (minutes === null) return;
-    const start = snapMinutes(Math.min(minutes, DAY_END_MINUTE - MIN_TASK_MINUTES));
+  const handleStartMinutes = (minutes: number) => {
+    const start = Math.max(0, Math.min(minutes, DAY_END_MINUTE - MIN_TASK_MINUTES));
     patch({ start, end: Math.min(DAY_END_MINUTE, start + duration) });
   };
 
+  const handleStartChange = (value: string) => {
+    const minutes = fromTimeValue(value);
+    if (minutes === null) return;
+    handleStartMinutes(minutes);
+  };
+
   /** Bitiş başlangıcın gerisine düşemez; en az 15dk kalır. 00:00 = gün sonu. */
+  const handleEndMinutes = (minutes: number) => {
+    patch({ end: Math.max(form.start + MIN_TASK_MINUTES, Math.min(DAY_END_MINUTE, minutes)) });
+  };
+
   const handleEndChange = (value: string) => {
     const minutes = fromTimeValue(value);
     if (minutes === null) return;
-    const snapped = snapMinutes(minutes);
-    const end = snapped === 0 ? DAY_END_MINUTE : snapped;
-    patch({ end: Math.max(form.start + MIN_TASK_MINUTES, Math.min(DAY_END_MINUTE, end)) });
+    handleEndMinutes(minutes === 0 ? DAY_END_MINUTE : minutes);
   };
 
   const handleSubmit = () => {
@@ -167,7 +172,7 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
 
   return (
     <Dialog open onOpenChange={(open) => !open && closeEditor()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{heading}</DialogTitle>
           <DialogDescription className="font-mono text-xs">
@@ -187,7 +192,7 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
             <Label htmlFor="task-title">Başlık</Label>
             <Input
               id="task-title"
-              autoFocus
+              autoFocus={!isEdit}
               value={form.title}
               placeholder="Ne yapacaksın?"
               onChange={(event) => patch({ title: event.target.value })}
@@ -205,10 +210,14 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               <Input
                 id="task-start"
                 type="time"
-                step={900}
-                className="font-mono"
+                step={60}
+                className="h-10 font-mono text-base sm:text-sm"
                 value={toTimeValue(form.start)}
                 onChange={(event) => handleStartChange(event.target.value)}
+              />
+              <MinuteNudgeRow
+                label="Başlangıç"
+                onStep={(delta) => handleStartMinutes(form.start + delta)}
               />
             </div>
             <div className="space-y-1.5">
@@ -216,10 +225,14 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               <Input
                 id="task-end"
                 type="time"
-                step={900}
-                className="font-mono"
+                step={60}
+                className="h-10 font-mono text-base sm:text-sm"
                 value={toTimeValue(form.start + duration)}
                 onChange={(event) => handleEndChange(event.target.value)}
+              />
+              <MinuteNudgeRow
+                label="Bitiş"
+                onStep={(delta) => handleEndMinutes(form.start + duration + delta)}
               />
             </div>
           </div>
@@ -290,5 +303,32 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const MINUTE_STEPS = [-5, -1, 1, 5] as const;
+
+/** Dakikayı 15'e yuvarlamadan tek dokunuşla ±1 / ±5 dakika kaydırır. */
+function MinuteNudgeRow({
+  label,
+  onStep,
+}: {
+  label: string;
+  onStep: (delta: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {MINUTE_STEPS.map((delta) => (
+        <button
+          key={delta}
+          type="button"
+          onClick={() => onStep(delta)}
+          aria-label={`${label} saatini ${delta > 0 ? `+${delta}` : delta} dakika ayarla`}
+          className="flex-1 rounded-md border border-white/[0.08] bg-white/[0.03] py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground active:scale-95"
+        >
+          {delta > 0 ? `+${delta}` : delta}
+        </button>
+      ))}
+    </div>
   );
 }

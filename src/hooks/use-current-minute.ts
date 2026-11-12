@@ -20,14 +20,29 @@ export function useCurrentMinute(): number | null {
   const [minute, setMinute] = useState<number | null>(null);
 
   useEffect(() => {
+    let boundaryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleBoundary = () => {
+      clearTimeout(boundaryTimer);
+      // Bir sonraki dakikanın tam başında (00. saniyede) rozet anında dönsün.
+      const msToNextMinute = 60_000 - (Date.now() % 60_000) + 50;
+      boundaryTimer = setTimeout(() => {
+        setMinute(toDayMinutes(new Date()));
+        scheduleBoundary();
+      }, msToNextMinute);
+    };
+
     const tick = () => {
       setMinute(toDayMinutes(new Date()));
+      scheduleBoundary();
     };
 
     tick();
 
-    // 10 saniyede bir periyodik tazeleme
-    const interval = setInterval(tick, 10_000);
+    // Arka plan uykusundan dönüş için güvenlik ağı
+    const interval = setInterval(() => {
+      setMinute(toDayMinutes(new Date()));
+    }, 10_000);
 
     // Sekmeye/pencereye dönüşte donmayı önleyen anlık dinleyiciler
     const onFocus = () => tick();
@@ -39,6 +54,7 @@ export function useCurrentMinute(): number | null {
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
+      clearTimeout(boundaryTimer);
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);

@@ -10,7 +10,7 @@ import { postAi } from '@/lib/ai-client';
 import { sanitizeScheduleItems, type ScheduleItem } from '@/lib/magic-schedule';
 import { useTaskStore } from '@/store/useTaskStore';
 
-const EXAMPLE = '2 saat kod yazacağım, 1 saat spor, akşam 30 dk kitap';
+const EXAMPLE = 'Örn: 2 saat kod, 1 saat spor';
 
 /**
  * "Günüme Dağıt" girdisi.

@@ -46,6 +46,15 @@ describe('geri alma', () => {
     expect(harita(gorevler())).toMatchObject({ a: '09:00-10:00' });
   });
 
+  it('tam dakikalı (45/47 gibi) blokların dakika hassasiyetini korur', () => {
+    kur([gorev('a', '09:47', 60)]);
+    useTaskStore.getState().moveTask('a', 10 * 60 + 2);
+    expect(harita(gorevler())).toMatchObject({ a: '10:02-11:02' });
+
+    useTaskStore.getState().resizeTask('a', 'end', 10 * 60 + 47);
+    expect(harita(gorevler())).toMatchObject({ a: '10:02-10:47' });
+  });
+
   it('tampon algoritmasının sildiği bloğu da geri getirir', () => {
     kur([
       gorev('is', '09:00', 60),

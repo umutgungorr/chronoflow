@@ -226,12 +226,12 @@ function RoutinesSection() {
             <Input
               id="routine-start"
               type="time"
-              step={900}
-              className="font-mono"
+              step={60}
+              className="h-10 font-mono text-base sm:text-sm"
               value={toTime(start)}
               onChange={(event) => {
                 const m = toMinutes(event.target.value);
-                if (m !== null) setStart(Math.round(m / 15) * 15);
+                if (m !== null) setStart(m);
               }}
             />
           </div>
@@ -240,14 +240,14 @@ function RoutinesSection() {
             <Input
               id="routine-duration"
               type="number"
-              min={15}
+              min={5}
               max={720}
-              step={15}
-              className="font-mono"
+              step={1}
+              className="h-10 font-mono text-base sm:text-sm"
               value={duration}
               onChange={(event) => {
                 const v = Number(event.target.value);
-                if (Number.isFinite(v)) setDuration(Math.min(720, Math.max(15, Math.round(v / 15) * 15)));
+                if (Number.isFinite(v)) setDuration(Math.min(720, Math.max(5, Math.round(v))));
               }}
             />
           </div>

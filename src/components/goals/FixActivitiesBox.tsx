@@ -362,9 +362,10 @@ export function FixActivitiesBox() {
                   <label className="text-xs font-medium text-muted-foreground">Başlangıç Saati</label>
                   <input
                     type="time"
+                    step={60}
                     value={timeStr}
                     onChange={(e) => setTimeStr(e.target.value)}
-                    className="w-full rounded-xl border border-white/[0.08] bg-[#070c10] px-3 py-2 font-mono text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#070c10] px-3 py-2 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                   />
                 </div>
 
@@ -372,12 +373,12 @@ export function FixActivitiesBox() {
                   <label className="text-xs font-medium text-muted-foreground">Süre (Dakika)</label>
                   <input
                     type="number"
-                    step={15}
-                    min={15}
+                    step={1}
+                    min={5}
                     max={240}
                     value={duration}
-                    onChange={(e) => setDuration(Math.max(15, Number(e.target.value)))}
-                    className="w-full rounded-xl border border-white/[0.08] bg-[#070c10] px-3 py-2 font-mono text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    onChange={(e) => setDuration(Math.max(5, Number(e.target.value)))}
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#070c10] px-3 py-2 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
                   />
                 </div>
               </div>
