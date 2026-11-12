@@ -18,7 +18,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { DAY_END_MINUTE, MIN_TASK_MINUTES } from '@/lib/constants';
+import { TimeSelect } from '@/components/ui/time-select';
+import { DAY_END_MINUTE } from '@/lib/constants';
 import {
   formatDuration,
   fromDayMinutes,
@@ -28,15 +29,11 @@ import {
 import { useTaskStore } from '@/store/useTaskStore';
 import type { TaskCategory } from '@/types';
 
-/** "HH:mm" ↔ gün içi dakika. Time input'un dili budur. */
+/** "HH:mm" biçimi (gün sonu 1440 → "24:00"). */
 function toTimeValue(minutes: number): string {
-  const clamped = Math.min(DAY_END_MINUTE - 1, Math.max(0, minutes));
+  if (minutes >= DAY_END_MINUTE) return '24:00';
+  const clamped = Math.max(0, minutes);
   return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
-}
-
-function fromTimeValue(value: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
 type FormState = {
@@ -125,40 +122,42 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
 
   const [form, setForm] = useState<FormState>(initial);
   const isEdit = taskId !== null;
-  const duration = Math.max(MIN_TASK_MINUTES, form.end - form.start);
+  const rawDuration = form.end - form.start;
+  const isRangeValid = rawDuration >= 1;
+  const duration = Math.max(1, rawDuration);
 
   const patch = (changes: Partial<FormState>) =>
     setForm((current) => ({ ...current, ...changes }));
 
-  /** Başlangıç değişince süre korunur — takvim uygulamalarının beklenen davranışı. */
+  /**
+   * Başlangıç seçildiğinde bitiş hâlâ başlangıçtan sonraysa bitişe dokunma
+   * (kullanıcı bitişi bağımsız seçebilsin); başlangıç bitişi geçerse önceki
+   * süreyi koruyarak bitişi ileri al.
+   */
   const handleStartMinutes = (minutes: number) => {
-    const start = Math.max(0, Math.min(minutes, DAY_END_MINUTE - MIN_TASK_MINUTES));
-    patch({ start, end: Math.min(DAY_END_MINUTE, start + duration) });
+    const start = Math.max(0, Math.min(minutes, DAY_END_MINUTE - 1));
+    if (start < form.end) {
+      patch({ start });
+      return;
+    }
+    const carry = form.end > form.start ? form.end - form.start : 60;
+    patch({ start, end: Math.min(DAY_END_MINUTE, start + carry) });
   };
 
-  const handleStartChange = (value: string) => {
-    const minutes = fromTimeValue(value);
-    if (minutes === null) return;
-    handleStartMinutes(minutes);
-  };
-
-  /** Bitiş başlangıcın gerisine düşemez; en az 15dk kalır. 00:00 = gün sonu. */
+  /** Bitiş saati tamamen bağımsız ayarlanır (en erken 00:01, en geç 24:00). */
   const handleEndMinutes = (minutes: number) => {
-    patch({ end: Math.max(form.start + MIN_TASK_MINUTES, Math.min(DAY_END_MINUTE, minutes)) });
-  };
-
-  const handleEndChange = (value: string) => {
-    const minutes = fromTimeValue(value);
-    if (minutes === null) return;
-    handleEndMinutes(minutes === 0 ? DAY_END_MINUTE : minutes);
+    const end = Math.max(1, Math.min(DAY_END_MINUTE, minutes));
+    patch({ end });
   };
 
   const handleSubmit = () => {
+    if (!isRangeValid) return;
+
     const payload = {
       title: form.title.trim() || 'Adsız blok',
       description: form.description.trim() || undefined,
       startTime: fromDayMinutes(day, form.start),
-      endTime: fromDayMinutes(day, form.start + duration),
+      endTime: fromDayMinutes(day, form.end),
       category: form.category,
       isFixed: form.isFixed,
       isCompleted: form.isCompleted,
@@ -176,8 +175,8 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
         <DialogHeader>
           <DialogTitle>{heading}</DialogTitle>
           <DialogDescription className="font-mono text-xs">
-            {toTimeValue(form.start)} – {toTimeValue(form.start + duration)} ·{' '}
-            {formatDuration(duration)}
+            {toTimeValue(form.start)} – {toTimeValue(form.end)}
+            {isRangeValid ? ` · ${formatDuration(duration)}` : ' · geçersiz aralık'}
           </DialogDescription>
         </DialogHeader>
 
@@ -204,37 +203,33 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
             <CategoryPicker value={form.category} onChange={(category) => patch({ category })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="task-start">Başlangıç</Label>
-              <Input
-                id="task-start"
-                type="time"
-                step={60}
-                className="h-10 font-mono text-base sm:text-sm"
-                value={toTimeValue(form.start)}
-                onChange={(event) => handleStartChange(event.target.value)}
-              />
-              <MinuteNudgeRow
-                label="Başlangıç"
-                onStep={(delta) => handleStartMinutes(form.start + delta)}
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="task-start">Başlangıç</Label>
+                <TimeSelect
+                  id="task-start"
+                  label="Başlangıç"
+                  value={form.start}
+                  onChange={handleStartMinutes}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="task-end">Bitiş</Label>
+                <TimeSelect
+                  id="task-end"
+                  label="Bitiş"
+                  value={form.end}
+                  allowEndOfDay
+                  onChange={handleEndMinutes}
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="task-end">Bitiş</Label>
-              <Input
-                id="task-end"
-                type="time"
-                step={60}
-                className="h-10 font-mono text-base sm:text-sm"
-                value={toTimeValue(form.start + duration)}
-                onChange={(event) => handleEndChange(event.target.value)}
-              />
-              <MinuteNudgeRow
-                label="Bitiş"
-                onStep={(delta) => handleEndMinutes(form.start + duration + delta)}
-              />
-            </div>
+            {!isRangeValid && (
+              <p className="text-xs font-medium text-destructive">
+                Bitiş saati başlangıç saatinden sonra olmalı.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -293,42 +288,17 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               <span />
             )}
 
-            <div className="flex gap-2">
+              <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={closeEditor}>
                 İptal
               </Button>
-              <Button type="submit">{submitLabel}</Button>
+              <Button type="submit" disabled={!isRangeValid}>
+                {submitLabel}
+              </Button>
             </div>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-const MINUTE_STEPS = [-5, -1, 1, 5] as const;
-
-/** Dakikayı 15'e yuvarlamadan tek dokunuşla ±1 / ±5 dakika kaydırır. */
-function MinuteNudgeRow({
-  label,
-  onStep,
-}: {
-  label: string;
-  onStep: (delta: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1">
-      {MINUTE_STEPS.map((delta) => (
-        <button
-          key={delta}
-          type="button"
-          onClick={() => onStep(delta)}
-          aria-label={`${label} saatini ${delta > 0 ? `+${delta}` : delta} dakika ayarla`}
-          className="flex-1 rounded-md border border-white/[0.08] bg-white/[0.03] py-1 font-mono text-[11px] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-foreground active:scale-95"
-        >
-          {delta > 0 ? `+${delta}` : delta}
-        </button>
-      ))}
-    </div>
   );
 }

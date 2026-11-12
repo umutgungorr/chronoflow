@@ -16,6 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { TimeSelect } from '@/components/ui/time-select';
 import { DAY_LABELS, EVERY_DAY, WEEKDAYS, WEEKEND, type Routine } from '@/lib/routines';
 import { dayKey, formatDuration, formatTime, fromDayMinutes } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -47,7 +48,7 @@ export function FixActivitiesBox() {
 
   // Form State
   const [title, setTitle] = useState('');
-  const [timeStr, setTimeStr] = useState('08:30');
+  const [startMinutes, setStartMinutes] = useState(8 * 60 + 30);
   const [duration, setDuration] = useState(45);
   const [category, setCategory] = useState<TaskCategory>('ROUTINE');
   const [days, setDays] = useState<number[]>(EVERY_DAY);
@@ -71,7 +72,7 @@ export function FixActivitiesBox() {
   const openCreateModal = () => {
     setEditingRoutine(null);
     setTitle('');
-    setTimeStr('08:30');
+    setStartMinutes(8 * 60 + 30);
     setDuration(45);
     setCategory('ROUTINE');
     setDays(EVERY_DAY);
@@ -82,9 +83,7 @@ export function FixActivitiesBox() {
   const openEditModal = (routine: Routine) => {
     setEditingRoutine(routine);
     setTitle(routine.title);
-    const h = Math.floor(routine.start / 60);
-    const m = routine.start % 60;
-    setTimeStr(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+    setStartMinutes(routine.start);
     setDuration(routine.duration);
     setCategory(routine.category);
     setDays(routine.days);
@@ -95,9 +94,6 @@ export function FixActivitiesBox() {
   const handleSave = () => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
-
-    const [h, m] = timeStr.split(':').map(Number);
-    const startMinutes = (isNaN(h) ? 9 : h) * 60 + (isNaN(m) ? 0 : m);
 
     if (editingRoutine) {
       updateRoutine(editingRoutine.id, {
@@ -359,13 +355,15 @@ export function FixActivitiesBox() {
               {/* Başlangıç Saati ve Süre */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">Başlangıç Saati</label>
-                  <input
-                    type="time"
-                    step={60}
-                    value={timeStr}
-                    onChange={(e) => setTimeStr(e.target.value)}
-                    className="w-full rounded-xl border border-white/[0.08] bg-[#070c10] px-3 py-2 font-mono text-base text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
+                  <label htmlFor="fix-activity-start" className="text-xs font-medium text-muted-foreground">
+                    Başlangıç Saati
+                  </label>
+                  <TimeSelect
+                    id="fix-activity-start"
+                    label="Başlangıç"
+                    value={startMinutes}
+                    showNudge={false}
+                    onChange={setStartMinutes}
                   />
                 </div>
 

@@ -4,7 +4,6 @@ import { tr } from 'date-fns/locale';
 import {
   DAY_END_MINUTE,
   DAY_START_MINUTE,
-  MIN_TASK_MINUTES,
   PX_PER_MINUTE,
   SLOT_MINUTES,
 } from '@/lib/constants';
@@ -76,7 +75,7 @@ export function yToSnappedMinutes(y: number): number {
 /* -------------------------------------------------------------------------- */
 
 export function getDurationMinutes(task: Pick<Task, 'startTime' | 'endTime'>): number {
-  return Math.max(MIN_TASK_MINUTES, differenceInMinutes(task.endTime, task.startTime));
+  return Math.max(1, differenceInMinutes(task.endTime, task.startTime));
 }
 
 export function getStartMinutes(task: Pick<Task, 'startTime'>): number {

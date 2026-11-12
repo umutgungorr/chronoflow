@@ -152,7 +152,7 @@ export function TaskBlock({
       onKeyDown={handleKeyDown}
       style={{
         top,
-        height: Math.max(height - 3, 20),
+        height: Math.max(height - 3, 24),
         left: `${lane * laneWidth}%`,
         width: `calc(${laneWidth}% - 4px)`,
       }}

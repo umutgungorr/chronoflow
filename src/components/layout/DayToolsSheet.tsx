@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { TimeSelect } from '@/components/ui/time-select';
 import { useBlockNotifications } from '@/hooks/use-block-notifications';
 import { postAi } from '@/lib/ai-client';
 import { localReview, summarizeDay } from '@/lib/day-review';
@@ -23,11 +24,6 @@ import { formatDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useTaskStore } from '@/store/useTaskStore';
 import { CATEGORY_META, type TaskCategory } from '@/types';
-
-function toMinutes(value: string): number | null {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(value);
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-}
 
 function toTime(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -223,16 +219,12 @@ function RoutinesSection() {
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="routine-start">Başlangıç</Label>
-            <Input
+            <TimeSelect
               id="routine-start"
-              type="time"
-              step={60}
-              className="h-10 font-mono text-base sm:text-sm"
-              value={toTime(start)}
-              onChange={(event) => {
-                const m = toMinutes(event.target.value);
-                if (m !== null) setStart(m);
-              }}
+              label="Başlangıç"
+              value={start}
+              showNudge={false}
+              onChange={setStart}
             />
           </div>
           <div className="space-y-1.5">

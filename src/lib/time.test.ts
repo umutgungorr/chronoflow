@@ -77,9 +77,11 @@ describe('görev yardımcıları', () => {
     expect(toDayMinutes(fromDayMinutes(GUN, 555))).toBe(555);
   });
 
-  it('getDurationMinutes süreyi verir ve 15dk altına inmez', () => {
+  it('getDurationMinutes tam dakika süresini verir (en az 1dk)', () => {
     expect(getDurationMinutes(gorev('a', '09:00', 90))).toBe(90);
-    expect(getDurationMinutes(gorev('a', '09:00', 5))).toBe(15);
+    expect(getDurationMinutes(gorev('a', '09:00', 5))).toBe(5);
+    expect(getDurationMinutes(gorev('a', '09:47', 13))).toBe(13);
+    expect(getDurationMinutes(gorev('a', '09:00', 0))).toBe(1);
   });
 
   it('tasksOverlap uç uca değmeyi çakışma saymaz', () => {
