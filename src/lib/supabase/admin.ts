@@ -54,7 +54,48 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
   }));
 }
 
-export async function fetchVisits(limit = 100): Promise<VisitRow[]> {
+export const VISIT_DEDUPE_GAP_MS = 60 * 60_000;
+
+/**
+ * Aynı ziyaretçinin (kullanıcı + IP + cihaz) ardışık sayfa geçişlerinden
+ * doğan tekrar kayıtlarını tek oturumda birleştirir; en güncel kaydı tutar.
+ */
+export function dedupeVisits(
+  visits: VisitRow[],
+  maxGapMs = VISIT_DEDUPE_GAP_MS,
+): VisitRow[] {
+  const sorted = [...visits].sort((a, b) => {
+    const tA = Date.parse(a.occurredAt);
+    const tB = Date.parse(b.occurredAt);
+    if (Number.isNaN(tA) || Number.isNaN(tB)) return 0;
+    return tB - tA;
+  });
+
+  const lastClusterTimeByVisitor = new Map<string, number>();
+  const result: VisitRow[] = [];
+
+  for (const row of sorted) {
+    const timeMs = Date.parse(row.occurredAt);
+    if (Number.isNaN(timeMs)) {
+      result.push(row);
+      continue;
+    }
+
+    const visitorKey = `${row.userId ?? 'anon'}|${row.ip ?? ''}|${describeUserAgent(row.userAgent)}`;
+    const prevTimeMs = lastClusterTimeByVisitor.get(visitorKey);
+    if (prevTimeMs !== undefined && prevTimeMs - timeMs <= maxGapMs) {
+      lastClusterTimeByVisitor.set(visitorKey, timeMs);
+      continue;
+    }
+
+    lastClusterTimeByVisitor.set(visitorKey, timeMs);
+    result.push(row);
+  }
+
+  return result;
+}
+
+export async function fetchVisits(limit = 250): Promise<VisitRow[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('visits')
@@ -62,7 +103,7 @@ export async function fetchVisits(limit = 100): Promise<VisitRow[]> {
     .order('occurred_at', { ascending: false })
     .limit(limit);
   if (error || !data) return [];
-  return (data as Record<string, unknown>[]).map((row) => ({
+  const rows: VisitRow[] = (data as Record<string, unknown>[]).map((row) => ({
     id: Number(row.id),
     occurredAt: String(row.occurred_at),
     userId: (row.user_id as string | null) ?? null,
@@ -71,6 +112,7 @@ export async function fetchVisits(limit = 100): Promise<VisitRow[]> {
     path: (row.path as string | null) ?? null,
     referer: (row.referer as string | null) ?? null,
   }));
+  return dedupeVisits(rows);
 }
 
 /** "Chrome · Windows" — uzun user agent metnini okunur hâle getirir. */

@@ -20,7 +20,9 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const MAX_BODY_BYTES = 8 * 1024;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
+const VISIT_COOLDOWN_MS = 30 * 60_000;
 const requestsByVisitor = new Map<string, { count: number; resetAt: number }>();
+const recentVisitsByVisitor = new Map<string, number>();
 
 /** Vercel istemci IP'sini bu başlıklarda taşır; ilki en güvenilir olan. */
 function readIp(request: Request): string | null {
@@ -86,9 +88,17 @@ export async function POST(request: Request) {
   }
 
   const ip = readIp(request);
-  if (isRateLimited(`${authData.user.id}:${ip ?? 'unknown'}`)) {
+  const visitorKey = `${authData.user.id}:${ip ?? 'unknown'}`;
+  if (isRateLimited(visitorKey)) {
     return NextResponse.json({ ok: false, reason: 'rate-limited' }, { status: 429 });
   }
+
+  const now = Date.now();
+  const lastVisitAt = recentVisitsByVisitor.get(visitorKey);
+  if (lastVisitAt !== undefined && now - lastVisitAt < VISIT_COOLDOWN_MS) {
+    return NextResponse.json({ ok: true, deduplicated: true });
+  }
+  recentVisitsByVisitor.set(visitorKey, now);
 
   const { error } = await supabase.from('visits').insert({
     user_id: authData.user.id,

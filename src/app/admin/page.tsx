@@ -125,7 +125,6 @@ function Admin() {
                 <th className="px-3 py-2 font-normal">Kim</th>
                 <th className="px-3 py-2 font-normal">IP</th>
                 <th className="px-3 py-2 font-normal">Cihaz</th>
-                <th className="px-3 py-2 font-normal">Sayfa</th>
               </tr>
             </thead>
             <tbody>
@@ -147,15 +146,12 @@ function Admin() {
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">
                       {describeUserAgent(v.userAgent)}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                      {v.path ?? '—'}
-                    </td>
                   </tr>
                 );
               })}
               {visits.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                  <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
                     {yukleniyor ? 'Yükleniyor…' : 'Henüz ziyaret kaydı yok.'}
                   </td>
                 </tr>
