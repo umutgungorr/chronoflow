@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Pencil, Sparkles } from 'lucide-react';
 
 import {
   getTaskIconMeta,
@@ -21,85 +21,74 @@ type Props = {
 };
 
 /**
- * Notion tarzı ikon seçici: varsayılan olarak başlığa göre otomatik
- * en uygun ders/aktivite imgesini seçer; istenirse elle 34 imge arasından değiştirilebilir.
+ * Başlık kutusunun hemen solunda duran küçük Notion tarzı imge düğmesi.
+ * Tıklanınca 34 imge arasından seçim yapılabilen açılır pencere (popover) açılır.
  */
 export function IconPicker({ title, category, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<TaskIconGroup>('academic');
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const isCustom = isTaskIconId(value);
   const activeMeta = getTaskIconMeta(title, category, value);
   const ActiveIcon = activeMeta.icon;
   const visibleIcons = TASK_ICON_CATALOG.filter((item) => item.group === group);
 
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          aria-expanded={open}
-          className="flex flex-1 items-center justify-between gap-2.5 rounded-lg border border-white/[0.08] bg-muted/40 px-2.5 py-2 text-left text-xs transition-colors hover:border-white/20 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span className="flex min-w-0 items-center gap-2.5">
-            <span
-              className={cn(
-                'flex size-7 shrink-0 items-center justify-center rounded-md',
-                activeMeta.badgeClass,
-              )}
-              aria-hidden
-            >
-              <ActiveIcon className="size-4 stroke-[2]" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate font-medium text-foreground">{activeMeta.label}</span>
-              <span className="block text-[10px] text-muted-foreground">
-                {isCustom ? 'Özel seçili imge' : 'Otomatik (başlığa göre)'}
-              </span>
-            </span>
-          </span>
-          <ChevronDown
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              open && 'rotate-180',
-            )}
-          />
-        </button>
+  useEffect(() => {
+    if (!open) return;
 
-        {isCustom && (
-          <button
-            type="button"
-            onClick={() => onChange(undefined)}
-            title="Başlığa göre otomatik seçime dön"
-            className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-          >
-            <Sparkles className="size-3.5" />
-            Otomatik
-          </button>
+    const handlePointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-label={`İmge seç (${activeMeta.label})`}
+        title={`${activeMeta.label} · İmgeyi değiştirmek için tıkla`}
+        className={cn(
+          'group/icon relative flex size-9 items-center justify-center rounded-lg border border-white/[0.1] transition-all',
+          'hover:scale-105 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          open && 'border-primary ring-2 ring-primary/30',
+          activeMeta.badgeClass,
         )}
-      </div>
+      >
+        <ActiveIcon className="size-4 stroke-[2]" aria-hidden />
+        <span
+          className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full border border-white/15 bg-[#0b1219] text-muted-foreground opacity-80 transition-opacity group-hover/icon:opacity-100 group-hover/icon:text-primary"
+          aria-hidden
+        >
+          <Pencil className="size-2" />
+        </span>
+      </button>
 
       {open && (
-        <div className="rounded-xl border border-white/[0.1] bg-[#0b1219] p-2.5 shadow-xl">
-          {/* Grup sekmeleri + otomatik sıfırlama */}
-          <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1.5 border-b border-white/[0.06] pb-2">
-            <div className="flex flex-wrap gap-1">
-              {TASK_ICON_GROUPS.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setGroup(g.id)}
-                  className={cn(
-                    'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
-                    group === g.id
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground',
-                  )}
-                >
-                  {g.label}
-                </button>
-              ))}
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-white/[0.12] bg-[#0b1219] p-2.5 shadow-2xl sm:w-80">
+          {/* Üst bilgi + Otomatik sıfırlama */}
+          <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-foreground">{activeMeta.label}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {isCustom ? 'Özel seçili imge' : 'Otomatik (başlığa göre)'}
+              </p>
             </div>
 
             <button
@@ -108,15 +97,34 @@ export function IconPicker({ title, category, value, onChange }: Props) {
                 onChange(undefined);
                 setOpen(false);
               }}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-primary/90 transition-colors hover:bg-primary/10"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-primary/90 transition-colors hover:border-primary/40 hover:bg-primary/10"
             >
               <Sparkles className="size-3" />
-              Otomatik Seç
+              Otomatik
             </button>
           </div>
 
-          {/* İkon Izgarası */}
-          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+          {/* Grup sekmeleri */}
+          <div className="mb-2 flex flex-wrap gap-1">
+            {TASK_ICON_GROUPS.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => setGroup(g.id)}
+                className={cn(
+                  'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
+                  group === g.id
+                    ? 'bg-primary/15 text-primary'
+                    : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground',
+                )}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 6 sütunlu kompakt ikon ızgarası */}
+          <div className="grid grid-cols-6 gap-1.5">
             {visibleIcons.map((item) => {
               const Icon = item.icon;
               const selected = activeMeta.id === item.id;
@@ -125,15 +133,16 @@ export function IconPicker({ title, category, value, onChange }: Props) {
                   key={item.id}
                   type="button"
                   title={item.label}
+                  aria-label={item.label}
                   onClick={() => {
                     onChange(item.id);
                     setOpen(false);
                   }}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-center transition-all',
+                    'flex items-center justify-center rounded-lg border p-2 transition-all',
                     selected
-                      ? 'border-primary/60 bg-primary/12 text-foreground shadow-[0_0_12px_-4px_var(--primary)]'
-                      : 'border-white/[0.05] bg-white/[0.02] text-muted-foreground hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground',
+                      ? 'border-primary/70 bg-primary/15 shadow-[0_0_12px_-4px_var(--primary)]'
+                      : 'border-white/[0.05] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.06]',
                   )}
                 >
                   <span
@@ -144,9 +153,6 @@ export function IconPicker({ title, category, value, onChange }: Props) {
                     aria-hidden
                   >
                     <Icon className="size-3.5 stroke-[2]" />
-                  </span>
-                  <span className="w-full truncate text-[9px] leading-tight">
-                    {item.label.split(' / ')[0]}
                   </span>
                 </button>
               );

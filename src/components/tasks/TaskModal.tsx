@@ -195,23 +195,22 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
         >
           <div className="space-y-1.5">
             <Label htmlFor="task-title">Başlık</Label>
-            <Input
-              id="task-title"
-              autoFocus={!isEdit}
-              value={form.title}
-              placeholder="Ne yapacaksın?"
-              onChange={(event) => patch({ title: event.target.value })}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>İmge (Notion Tarzı)</Label>
-            <IconPicker
-              title={form.title}
-              category={form.category}
-              value={form.icon}
-              onChange={(icon) => patch({ icon })}
-            />
+            <div className="relative flex items-center gap-2">
+              <IconPicker
+                title={form.title}
+                category={form.category}
+                value={form.icon}
+                onChange={(icon) => patch({ icon })}
+              />
+              <Input
+                id="task-title"
+                autoFocus={!isEdit}
+                value={form.title}
+                placeholder="Ne yapacaksın?"
+                onChange={(event) => patch({ title: event.target.value })}
+                className="flex-1"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

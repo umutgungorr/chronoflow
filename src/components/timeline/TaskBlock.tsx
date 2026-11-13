@@ -179,16 +179,23 @@ export function TaskBlock({
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(task.id);
+            }}
+            aria-label={`${task.title} imgesini değiştir`}
+            title="İmgeyi / bloğu düzenle"
             className={cn(
-              'flex shrink-0 items-center justify-center rounded-lg',
+              'flex shrink-0 items-center justify-center rounded-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
               isCompact ? 'size-5' : 'size-7',
               isBuffer ? 'bg-white/[0.04] text-muted-foreground' : iconMeta.badgeClass,
             )}
-            aria-hidden
           >
             <TaskIcon className={cn(isCompact ? 'size-3 stroke-[2]' : 'size-4 stroke-[2]')} />
-          </span>
+          </button>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
             <span className="flex w-full items-center gap-1.5">

@@ -428,31 +428,30 @@ function FocusBody() {
             </div>
           )}
 
-          {/* Serbest Konu Başlığı + İmge + Kategori */}
+          {/* Serbest Konu Başlığı + Kategori */}
           <div className="space-y-3">
             <div className="space-y-1.5">
               <label htmlFor="focus-title-input" className="text-xs font-medium text-muted-foreground">
                 Ders / Konu Başlığı
               </label>
-              <Input
-                id="focus-title-input"
-                value={selectedTitle}
-                onChange={(e) => {
-                  setSelectedTitle(e.target.value);
-                  if (selectedDailyGoalId) setSelectedDailyGoalId(undefined);
-                }}
-                placeholder="Ne çalışacaksın? Örn: Paragraf, Basit eşitsizlikler..."
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">İmge (Notion Tarzı)</span>
-              <IconPicker
-                title={selectedTitle}
-                category={selectedCategory}
-                value={selectedIcon}
-                onChange={setSelectedIcon}
-              />
+              <div className="relative flex items-center gap-2">
+                <IconPicker
+                  title={selectedTitle}
+                  category={selectedCategory}
+                  value={selectedIcon}
+                  onChange={setSelectedIcon}
+                />
+                <Input
+                  id="focus-title-input"
+                  value={selectedTitle}
+                  onChange={(e) => {
+                    setSelectedTitle(e.target.value);
+                    if (selectedDailyGoalId) setSelectedDailyGoalId(undefined);
+                  }}
+                  placeholder="Ne çalışacaksın? Örn: Paragraf, Basit eşitsizlikler..."
+                  className="flex-1"
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
