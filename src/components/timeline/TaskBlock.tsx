@@ -119,7 +119,7 @@ export function TaskBlock({
   });
 
   const isDragging = preview !== null;
-  const isCompact = duration <= 30;
+  const isCompact = duration < 25;
   const showTopHandle = duration >= TOP_HANDLE_MIN_DURATION;
 
   const startLabel = formatTime(fromDayMinutes(day, start));
@@ -156,7 +156,7 @@ export function TaskBlock({
       onKeyDown={handleKeyDown}
       style={{
         top,
-        height: Math.max(height - 3, 24),
+        height: Math.max(height - 2, 28),
         left: `${lane * laneWidth}%`,
         width: `calc(${laneWidth}% - 4px)`,
       }}
@@ -192,7 +192,7 @@ export function TaskBlock({
           tabIndex={-1}
           aria-hidden
           style={{ height: HANDLE_PX }}
-          className="w-full shrink-0 cursor-ns-resize touch-none"
+          className="absolute inset-x-0 top-0 z-20 cursor-ns-resize touch-none"
         />
       )}
 
@@ -237,7 +237,7 @@ export function TaskBlock({
               )}
               {isCompact && !isDragging && (
                 <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
-                  {startLabel} – {endLabel}
+                  {startLabel} – {endLabel} · {formatDuration(duration)}
                 </span>
               )}
             </span>
@@ -245,12 +245,8 @@ export function TaskBlock({
             {!isCompact && (
               <span className="mt-0.5 font-mono text-[11px] leading-tight text-muted-foreground">
                 {startLabel} – {endLabel}
-                {duration > 60 && (
-                  <>
-                    <span className="mx-1.5 opacity-40">·</span>
-                    <span>{formatDuration(duration)}</span>
-                  </>
-                )}
+                <span className="mx-1.5 opacity-40">·</span>
+                <span>{formatDuration(duration)}</span>
               </span>
             )}
           </div>
@@ -309,7 +305,7 @@ export function TaskBlock({
         tabIndex={-1}
         aria-hidden
         style={{ height: HANDLE_PX }}
-        className="group/handle flex w-full shrink-0 cursor-ns-resize touch-none items-center justify-center"
+        className="group/handle absolute inset-x-0 bottom-0 z-20 flex cursor-ns-resize touch-none items-center justify-center"
       >
         <span
           className={cn(

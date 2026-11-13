@@ -149,7 +149,7 @@ function WeekBody() {
                             {task.title}
                           </span>
                           <span className="font-mono text-[10px] text-muted-foreground">
-                            {formatTime(task.startTime)}–{formatTime(task.endTime)}
+                            {formatTime(task.startTime)}–{formatTime(task.endTime)} · {formatDuration(getDurationMinutes(task))}
                           </span>
                         </span>
                       </li>
