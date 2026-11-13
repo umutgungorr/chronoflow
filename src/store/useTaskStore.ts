@@ -588,10 +588,10 @@ export const useTaskStore = create<TaskStore>()(
       /* ---------------------------------------------------------------- */
       selectTask: (id) => set({ selectedTaskId: id }),
       openCreateEditor: (start, duration) =>
-        set({ editor: { mode: 'create', start, duration } }),
+        set({ editor: { mode: 'create', start, duration }, selectedTaskId: null }),
       openEditEditor: (taskId) =>
-        set({ editor: { mode: 'edit', taskId }, selectedTaskId: taskId }),
-      closeEditor: () => set({ editor: null }),
+        set({ editor: { mode: 'edit', taskId } }),
+      closeEditor: () => set({ editor: null, selectedTaskId: null }),
       clearFeedback: () => set({ feedback: null }),
 
       /* ---------------------------------------------------------------- */

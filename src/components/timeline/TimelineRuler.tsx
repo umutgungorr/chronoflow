@@ -45,7 +45,7 @@ export function TimelineRuler({
         const top = (hour - startHour) * HOUR_HEIGHT_PX;
         const isActive = activeHour === hour;
         const collidesWithNow =
-          nowMinute !== null && Math.abs(hour * 60 - nowMinute) <= 14;
+          nowMinute !== null && Math.abs(hour * 60 - nowMinute) <= 4;
 
         return (
           <div key={hour}>

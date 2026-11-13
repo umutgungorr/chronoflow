@@ -30,7 +30,7 @@ export function NowIndicator({
       style={{ top: minutesToY(minute, startMinute) }}
       aria-label={`Şu an ${label}`}
     >
-      <div className="relative flex items-center">
+      <div className="relative flex h-0 items-center">
         {/* Cetvel sütununa taşan yuvarlak saat rozeti ve bağlantı çizgisi */}
         <span
           className="absolute flex -translate-x-full items-center font-mono text-[10px] font-semibold leading-none"

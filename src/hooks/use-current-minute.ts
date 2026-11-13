@@ -39,24 +39,29 @@ export function useCurrentMinute(): number | null {
 
     tick();
 
-    // Arka plan uykusundan dönüş için güvenlik ağı
+    // Saniyede bir kontrol: React aynı dakika değerinde re-render yapmaz,
+    // ancak dakika değiştiği anda (00. saniyede) ve arka plan uykusundan dönüşte
+    // çizginin eski dakikada takılı kalmasını tamamen önler.
     const interval = setInterval(() => {
       setMinute(toDayMinutes(new Date()));
-    }, 10_000);
+    }, 1_000);
 
     // Sekmeye/pencereye dönüşte donmayı önleyen anlık dinleyiciler
     const onFocus = () => tick();
+    const onPageShow = () => tick();
     const onVisibility = () => {
       if (document.visibilityState === 'visible') tick();
     };
 
     window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onPageShow);
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       clearTimeout(boundaryTimer);
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);

@@ -60,6 +60,7 @@ export function TaskBlock({
   const meta = CATEGORY_META[task.category];
   const isBuffer = task.category === 'BUFFER';
   const storedIcon = useTaskStore((s) => s.taskIcons?.[task.id]);
+  const isLiveFocus = useTaskStore((s) => s.activeFocusSession?.taskId === task.id);
   const iconMeta = getTaskIconMeta(task.title, task.category, storedIcon ?? task.icon);
   const TaskIcon = iconMeta.icon;
 
@@ -141,7 +142,10 @@ export function TaskBlock({
         isDragging
           ? 'z-40 shadow-[0_12px_32px_rgba(0,0,0,0.6)] ring-1 ring-primary/40'
           : 'z-10 shadow-[0_4px_20px_rgba(0,0,0,0.28)]',
-        isSelected && !isDragging && 'ring-2 ring-primary/70',
+        isLiveFocus &&
+          !isDragging &&
+          'ring-2 ring-primary/80 shadow-[0_0_24px_-6px_var(--primary)]',
+        isSelected && !isLiveFocus && !isDragging && 'ring-1 ring-white/30',
       )}
     >
       {/* Sol kenar parlak kategori/turkuaz vurgu şeridi */}
@@ -229,6 +233,12 @@ export function TaskBlock({
               </span>
               {task.isFixed && (
                 <Lock className="size-3 shrink-0 text-muted-foreground" aria-label="Sabit" />
+              )}
+              {isLiveFocus && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-primary">
+                  <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+                  CANLI
+                </span>
               )}
               {isCompact && !isDragging && (
                 <span className="ml-auto shrink-0 font-mono text-[10px] leading-none text-muted-foreground">
