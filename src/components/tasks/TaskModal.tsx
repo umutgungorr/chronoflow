@@ -277,7 +277,7 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               </span>
             </label>
 
-            {isEdit && (
+            {isEdit && form.category !== 'BUFFER' && (
               <label className="flex items-center gap-2.5 text-sm">
                 <Checkbox
                   checked={form.isCompleted}

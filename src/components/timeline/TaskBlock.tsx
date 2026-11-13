@@ -278,7 +278,7 @@ export function TaskBlock({
             <Pencil className={cn(isUltraCompact ? 'size-2.5' : 'size-3')} />
           </button>
 
-          {onToggleComplete && (
+          {!isBuffer && onToggleComplete && (
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
