@@ -19,6 +19,8 @@ export type Task = {
   id: string;
   title: string;
   description?: string;
+  /** İsteğe bağlı özel Notion imgesi (boşsa başlığa göre otomatik seçilir). */
+  icon?: string;
   /** Görevin başlangıcı (yerel saat). */
   startTime: Date;
   /** Görevin bitişi. Her zaman startTime'dan en az MIN_TASK_MINUTES sonra. */

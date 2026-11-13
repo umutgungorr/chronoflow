@@ -15,6 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { getTaskIconMeta } from '@/lib/task-icons';
 import { dayKey, formatDayLabel } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useTaskStore } from '@/store/useTaskStore';
@@ -250,6 +251,8 @@ export function DailyGoalsBox() {
         ) : (
           filteredGoals.map((goal) => {
             const meta = CATEGORY_META[goal.category] ?? CATEGORY_META.WORK;
+            const iconMeta = getTaskIconMeta(goal.title, goal.category);
+            const GoalIcon = iconMeta.icon;
             const isEditing = editingId === goal.id;
 
             return (
@@ -274,6 +277,17 @@ export function DailyGoalsBox() {
                 >
                   {goal.isCompleted && <Check className="size-3.5 stroke-[3]" />}
                 </button>
+
+                {/* Notion Ders / Aktivite İmgesi */}
+                <span
+                  className={cn(
+                    'flex size-6 shrink-0 items-center justify-center rounded-md',
+                    iconMeta.badgeClass,
+                  )}
+                  aria-hidden
+                >
+                  <GoalIcon className="size-3.5 stroke-[2]" />
+                </span>
 
                 {/* Başlık (Düzenleme veya Gösterim) */}
                 <div className="min-w-0 flex-1">

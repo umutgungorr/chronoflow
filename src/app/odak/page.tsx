@@ -21,6 +21,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { FlowToast } from '@/components/layout/FlowToast';
 import { SyncBridge } from '@/components/layout/SyncStatus';
 import { CategoryPicker } from '@/components/tasks/CategoryPicker';
+import { IconPicker } from '@/components/tasks/IconPicker';
 import { SubtaskList } from '@/components/tasks/SubtaskList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,7 @@ import {
   pomodoroAt,
   secondsRemaining,
 } from '@/lib/focus';
+import { getTaskIconMeta } from '@/lib/task-icons';
 import { dayKey, formatDuration, formatRange, formatTime, getDurationMinutes } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useTaskStore } from '@/store/useTaskStore';
@@ -75,6 +77,7 @@ function Focus() {
 
 function FocusBody() {
   const tasks = useTaskStore((s) => s.tasks);
+  const taskIcons = useTaskStore((s) => s.taskIcons ?? {});
   const dailyGoals = useTaskStore((s) => s.dailyGoals ?? []);
   const focusSubjects = useTaskStore((s) => s.focusSubjects ?? DEFAULT_FOCUS_SUBJECTS);
   const activeFocusSession = useTaskStore((s) => s.activeFocusSession);
@@ -89,6 +92,7 @@ function FocusBody() {
   const [now, setNow] = useState(() => new Date());
   const [selectedTitle, setSelectedTitle] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<TaskCategory>('WORK');
+  const [selectedIcon, setSelectedIcon] = useState<string | undefined>(undefined);
   const [selectedDailyGoalId, setSelectedDailyGoalId] = useState<string | undefined>(undefined);
   const [newSubject, setNewSubject] = useState('');
   const [lastCompleted, setLastCompleted] = useState<Task | null>(null);
@@ -116,6 +120,12 @@ function FocusBody() {
     const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startedDate.getTime()) / 1000));
     const pomodoro = pomodoroAt(elapsedSeconds);
     const meta = CATEGORY_META[activeFocusSession.category] ?? CATEGORY_META.WORK;
+    const activeIconMeta = getTaskIconMeta(
+      activeFocusSession.title,
+      activeFocusSession.category,
+      taskIcons[activeFocusSession.taskId],
+    );
+    const ActiveFocusIcon = activeIconMeta.icon;
 
     const handleFinishAndTick = () => {
       syncActiveFocusSession(now);
@@ -123,6 +133,7 @@ function FocusBody() {
       if (finalized) {
         setLastCompleted(finalized);
         setSelectedTitle('');
+        setSelectedIcon(undefined);
         setSelectedDailyGoalId(undefined);
       }
     };
@@ -145,9 +156,20 @@ function FocusBody() {
           <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
             {meta.emoji} {meta.label}
           </p>
-          <h2 className="mt-1.5 text-2xl font-bold tracking-tight text-foreground">
-            {activeFocusSession.title}
-          </h2>
+          <div className="mt-2 flex items-center justify-center gap-2.5">
+            <span
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-lg',
+                activeIconMeta.badgeClass,
+              )}
+              aria-hidden
+            >
+              <ActiveFocusIcon className="size-4 stroke-[2]" />
+            </span>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              {activeFocusSession.title}
+            </h2>
+          </div>
 
           <p
             className="mt-5 font-mono text-6xl font-semibold tabular-nums tracking-tight text-foreground"
@@ -235,6 +257,7 @@ function FocusBody() {
     startFocusSession({
       title: cleanTitle,
       category: selectedCategory,
+      icon: selectedIcon,
       dailyGoalId: selectedDailyGoalId,
       now: new Date(),
     });
@@ -306,6 +329,8 @@ function FocusBody() {
               {focusSubjects.map((subject) => {
                 const isSelected =
                   selectedTitle.toLocaleLowerCase('tr-TR') === subject.toLocaleLowerCase('tr-TR');
+                const subjectIconMeta = getTaskIconMeta(subject, 'WORK');
+                const SubjectIcon = subjectIconMeta.icon;
                 return (
                   <div
                     key={subject}
@@ -320,11 +345,13 @@ function FocusBody() {
                       type="button"
                       onClick={() => {
                         setSelectedTitle(subject);
+                        setSelectedIcon(undefined);
                         setSelectedDailyGoalId(undefined);
                       }}
-                      className="px-3 py-1.5 text-left"
+                      className="flex items-center gap-1.5 py-1.5 pl-2.5 pr-2 text-left"
                     >
-                      {subject}
+                      <SubjectIcon className="size-3.5 shrink-0 opacity-85" aria-hidden />
+                      <span>{subject}</span>
                     </button>
                     <button
                       type="button"
@@ -401,7 +428,7 @@ function FocusBody() {
             </div>
           )}
 
-          {/* Serbest Konu Başlığı + Kategori */}
+          {/* Serbest Konu Başlığı + İmge + Kategori */}
           <div className="space-y-3">
             <div className="space-y-1.5">
               <label htmlFor="focus-title-input" className="text-xs font-medium text-muted-foreground">
@@ -415,6 +442,16 @@ function FocusBody() {
                   if (selectedDailyGoalId) setSelectedDailyGoalId(undefined);
                 }}
                 placeholder="Ne çalışacaksın? Örn: Paragraf, Basit eşitsizlikler..."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">İmge (Notion Tarzı)</span>
+              <IconPicker
+                title={selectedTitle}
+                category={selectedCategory}
+                value={selectedIcon}
+                onChange={setSelectedIcon}
               />
             </div>
 

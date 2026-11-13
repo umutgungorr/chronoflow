@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Lock, Trash2 } from 'lucide-react';
 
 import { CategoryPicker } from '@/components/tasks/CategoryPicker';
+import { IconPicker } from '@/components/tasks/IconPicker';
 import { SubtaskList } from '@/components/tasks/SubtaskList';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,6 +41,7 @@ type FormState = {
   title: string;
   description: string;
   category: TaskCategory;
+  icon?: string;
   start: number;
   end: number;
   isFixed: boolean;
@@ -58,6 +60,7 @@ type FormState = {
 export function TaskModal() {
   const editor = useTaskStore((s) => s.editor);
   const tasks = useTaskStore((s) => s.tasks);
+  const taskIcons = useTaskStore((s) => s.taskIcons);
 
   if (!editor) return null;
 
@@ -72,6 +75,7 @@ export function TaskModal() {
           title: '',
           description: '',
           category: 'WORK',
+          icon: undefined,
           start: editor.start,
           end: Math.min(DAY_END_MINUTE, editor.start + editor.duration),
           isFixed: false,
@@ -96,6 +100,7 @@ export function TaskModal() {
         title: task.title,
         description: task.description ?? '',
         category: task.category,
+        icon: taskIcons?.[task.id] ?? task.icon,
         start,
         end: start + getDurationMinutes(task),
         isFixed: task.isFixed,
@@ -156,6 +161,7 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
     const payload = {
       title: form.title.trim() || 'Adsız blok',
       description: form.description.trim() || undefined,
+      icon: form.icon || undefined,
       startTime: fromDayMinutes(day, form.start),
       endTime: fromDayMinutes(day, form.end),
       category: form.category,
@@ -195,6 +201,16 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
               value={form.title}
               placeholder="Ne yapacaksın?"
               onChange={(event) => patch({ title: event.target.value })}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>İmge (Notion Tarzı)</Label>
+            <IconPicker
+              title={form.title}
+              category={form.category}
+              value={form.icon}
+              onChange={(icon) => patch({ icon })}
             />
           </div>
 

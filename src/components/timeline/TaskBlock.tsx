@@ -1,22 +1,12 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import {
-  Check,
-  Clock,
-  Coffee,
-  Dumbbell,
-  Laptop,
-  Lock,
-  Pencil,
-  RefreshCw,
-  Users,
-  Zap,
-} from 'lucide-react';
+import { Check, Lock, Pencil } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
 import { DAY_START_MINUTE } from '@/lib/constants';
 import { applyDragPreview, type DragMode, type DragPreview } from '@/lib/layout';
+import { getTaskIconMeta } from '@/lib/task-icons';
 import {
   durationToPx,
   formatDuration,
@@ -26,37 +16,14 @@ import {
   minutesToY,
 } from '@/lib/time';
 import { cn } from '@/lib/utils';
-import { CATEGORY_META, type Task, type TaskCategory } from '@/types';
+import { useTaskStore } from '@/store/useTaskStore';
+import { CATEGORY_META, type Task } from '@/types';
 
 /** Tutamaç şeritlerinin yüksekliği (px). Dokunmatikte de yakalanabilir. */
 const HANDLE_PX = 7;
 
 /** Üst tutamağın gösterileceği en küçük blok süresi (dk). */
 const TOP_HANDLE_MIN_DURATION = 45;
-
-const CATEGORY_ICONS: Record<TaskCategory, typeof Laptop> = {
-  WORK: Laptop,
-  ROUTINE: Coffee,
-  HEALTH: Dumbbell,
-  URGENT: Zap,
-  SOCIAL: Users,
-  BUFFER: Clock,
-};
-
-function renderTaskIcon(task: Task) {
-  const lower = task.title.toLocaleLowerCase('tr-TR');
-  if (lower.includes('plan') || lower.includes('öncelik')) {
-    return <RefreshCw className="size-4 stroke-[2]" />;
-  }
-  if (lower.includes('öğle') || lower.includes('kahve') || lower.includes('mola')) {
-    return <Coffee className="size-4 stroke-[2]" />;
-  }
-  if (lower.includes('spor') || lower.includes('antrenman') || lower.includes('yürüyüş')) {
-    return <Dumbbell className="size-4 stroke-[2]" />;
-  }
-  const Icon = CATEGORY_ICONS[task.category] ?? Laptop;
-  return <Icon className="size-4 stroke-[2]" />;
-}
 
 type Props = {
   task: Task;
@@ -92,6 +59,9 @@ export function TaskBlock({
 }: Props) {
   const meta = CATEGORY_META[task.category];
   const isBuffer = task.category === 'BUFFER';
+  const storedIcon = useTaskStore((s) => s.taskIcons?.[task.id]);
+  const iconMeta = getTaskIconMeta(task.title, task.category, storedIcon ?? task.icon);
+  const TaskIcon = iconMeta.icon;
 
   /*
    * Konum tek bir yerden türetilir: görevin kendi saati + (varsa) sürükleme
@@ -209,17 +179,16 @@ export function TaskBlock({
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {!isCompact && (
-            <span
-              className={cn(
-                'flex size-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.03] text-primary',
-                isBuffer && 'text-muted-foreground',
-              )}
-              aria-hidden
-            >
-              {renderTaskIcon(task)}
-            </span>
-          )}
+          <span
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded-lg',
+              isCompact ? 'size-5' : 'size-7',
+              isBuffer ? 'bg-white/[0.04] text-muted-foreground' : iconMeta.badgeClass,
+            )}
+            aria-hidden
+          >
+            <TaskIcon className={cn(isCompact ? 'size-3 stroke-[2]' : 'size-4 stroke-[2]')} />
+          </span>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
             <span className="flex w-full items-center gap-1.5">

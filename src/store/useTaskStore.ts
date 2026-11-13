@@ -120,6 +120,8 @@ type TaskState = {
   activeFocusSession: ActiveFocusSession | null;
   /** Odak modunda hızlı seçim için kayıtlı ders/konu çipleri. */
   focusSubjects: string[];
+  /** Bloklara kullanıcı tarafından atanan özel Notion imgeleri (taskId → iconId). */
+  taskIcons: Record<string, string>;
 };
 
 /** Geçmişteki bir kare: o andaki plan + ne yapıldığının adı. */
@@ -222,6 +224,7 @@ type TaskActions = {
   startFocusSession: (input: {
     title: string;
     category?: TaskCategory;
+    icon?: string;
     dailyGoalId?: string;
     now?: Date;
   }) => string | null;
@@ -320,6 +323,7 @@ export const useTaskStore = create<TaskStore>()(
       routineCompleted: {},
       activeFocusSession: null,
       focusSubjects: DEFAULT_FOCUS_SUBJECTS,
+      taskIcons: {},
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
@@ -338,6 +342,7 @@ export const useTaskStore = create<TaskStore>()(
           id,
           title: input.title,
           description: input.description,
+          ...(input.icon ? { icon: input.icon } : {}),
           startTime: input.startTime,
           endTime: input.endTime,
           category: input.category,
@@ -347,6 +352,9 @@ export const useTaskStore = create<TaskStore>()(
         set((s) => ({
           ...snapshot(s, 'blok eklendi'),
           tasks: sortByStart([...s.tasks, task]),
+          ...(input.icon
+            ? { taskIcons: { ...(s.taskIcons ?? {}), [id]: input.icon } }
+            : {}),
         }));
         return id;
       },
@@ -354,12 +362,26 @@ export const useTaskStore = create<TaskStore>()(
       updateTask: (id, patch) => {
         const state = get();
         const next = state.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t));
+        let nextTaskIcons = state.taskIcons ?? {};
+        if ('icon' in patch) {
+          if (patch.icon) {
+            nextTaskIcons = { ...nextTaskIcons, [id]: patch.icon };
+          } else {
+            nextTaskIcons = Object.fromEntries(
+              Object.entries(nextTaskIcons).filter(([key]) => key !== id),
+            );
+          }
+        }
 
         // Tek kural: saat neresinden değişirse değişsin (sürükleme, klavye,
         // düzenleme penceresi) tampon zinciri aynı şekilde işler.
         const timeChanged = patch.startTime !== undefined || patch.endTime !== undefined;
         if (!timeChanged) {
-          set({ ...snapshot(state, 'blok düzenlendi'), tasks: sortByStart(next) });
+          set({
+            ...snapshot(state, 'blok düzenlendi'),
+            tasks: sortByStart(next),
+            taskIcons: nextTaskIcons,
+          });
           return;
         }
 
@@ -367,6 +389,7 @@ export const useTaskStore = create<TaskStore>()(
         set({
           ...snapshot(state, 'blok düzenlendi'),
           tasks: sortByStart(result.tasks),
+          taskIcons: nextTaskIcons,
           feedback: toFeedback(result),
         });
       },
@@ -376,6 +399,9 @@ export const useTaskStore = create<TaskStore>()(
           ...snapshot(s, 'blok silindi'),
           tasks: s.tasks.filter((t) => t.id !== id),
           subtasks: Object.fromEntries(Object.entries(s.subtasks).filter(([key]) => key !== id)),
+          taskIcons: Object.fromEntries(
+            Object.entries(s.taskIcons ?? {}).filter(([key]) => key !== id),
+          ),
           selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
           // Silinen görev düzenleniyorsa pencere de kapanmalı.
           editor: s.editor?.mode === 'edit' && s.editor.taskId === id ? null : s.editor,
@@ -854,6 +880,7 @@ export const useTaskStore = create<TaskStore>()(
         const task: Task = {
           id,
           title: clean,
+          ...(input.icon ? { icon: input.icon } : {}),
           startTime: fromDayMinutes(today, startMin),
           endTime: fromDayMinutes(today, endMin),
           category,
@@ -876,6 +903,9 @@ export const useTaskStore = create<TaskStore>()(
           tasks: sortByStart([...state.tasks, task]),
           activeFocusSession: session,
           selectedDate: today,
+          ...(input.icon
+            ? { taskIcons: { ...(state.taskIcons ?? {}), [id]: input.icon } }
+            : {}),
           feedback: {
             message: `"${clean}" odak oturumu ${formatTime(task.startTime)} itibarıyla başlatıldı.`,
             tone: 'info',
@@ -1002,7 +1032,12 @@ export const useTaskStore = create<TaskStore>()(
         })),
 
       // Senkron yolu: geçmişe kare bırakmaz (bkz. history alanının açıklaması).
-      replaceTasks: (tasks) => set({ tasks: sortByStart(tasks) }),
+      replaceTasks: (tasks) =>
+        set((s) => ({
+          tasks: sortByStart(
+            tasks.map((t) => (s.taskIcons?.[t.id] ? { ...t, icon: s.taskIcons[t.id] } : t)),
+          ),
+        })),
       replaceDayTitles: (titles) => set({ dayTitles: titles }),
       replaceGoals: (goals) => set({ goals }),
     }),
@@ -1037,6 +1072,7 @@ export const useTaskStore = create<TaskStore>()(
         dayStartHour: state.dayStartHour,
         activeFocusSession: state.activeFocusSession,
         focusSubjects: state.focusSubjects,
+        taskIcons: state.taskIcons,
       }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).
