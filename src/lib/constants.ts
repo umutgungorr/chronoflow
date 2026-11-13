@@ -10,12 +10,12 @@
 export const SLOT_MINUTES = 15;
 
 /** Bir 15 dakikalık dilimin piksel yüksekliği. */
-export const SLOT_HEIGHT_PX = 20;
+export const SLOT_HEIGHT_PX = 30;
 
-/** Türetilmiş: bir saatlik satırın yüksekliği (4 * 20 = 80px). */
+/** Türetilmiş: bir saatlik satırın yüksekliği (4 * 30 = 120px). */
 export const HOUR_HEIGHT_PX = (60 / SLOT_MINUTES) * SLOT_HEIGHT_PX;
 
-/** Türetilmiş: 1 dakika kaç piksel eder (20 / 15 = 1.333...). */
+/** Türetilmiş: 1 dakika kaç piksel eder (30 / 15 = 2px). */
 export const PX_PER_MINUTE = SLOT_HEIGHT_PX / SLOT_MINUTES;
 
 /** Gün 00:00'da başlar (gece yarısından itibaren dakika). */

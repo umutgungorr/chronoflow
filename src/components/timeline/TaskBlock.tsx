@@ -89,7 +89,8 @@ export function TaskBlock({
   });
 
   const isDragging = preview !== null;
-  const isCompact = duration < 25;
+  const isCompact = duration < 30;
+  const isUltraCompact = duration < 18;
   const showTopHandle = duration >= TOP_HANDLE_MIN_DURATION;
 
   const startLabel = formatTime(fromDayMinutes(day, start));
@@ -126,12 +127,13 @@ export function TaskBlock({
       onKeyDown={handleKeyDown}
       style={{
         top,
-        height: Math.max(height - 2, 28),
+        height: Math.max(height - 1, 16),
         left: `${lane * laneWidth}%`,
         width: `calc(${laneWidth}% - 4px)`,
       }}
       className={cn(
-        'group/block pointer-events-auto absolute flex flex-col overflow-hidden rounded-xl border text-left backdrop-blur-sm transition-all',
+        'group/block pointer-events-auto absolute flex flex-col overflow-hidden border text-left backdrop-blur-sm transition-all',
+        isUltraCompact ? 'rounded-md' : 'rounded-xl',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-canvas',
         isBuffer
           ? 'border-dashed border-white/10 bg-[#0d141b]/70'
@@ -174,11 +176,12 @@ export function TaskBlock({
         onClick={() => onSelect(task.id)}
         onDoubleClick={() => onOpen(task.id)}
         className={cn(
-          'flex min-h-0 flex-1 touch-none items-center justify-between gap-3 overflow-hidden pl-4 pr-3.5',
+          'flex min-h-0 flex-1 touch-none items-center justify-between gap-2 overflow-hidden',
+          isUltraCompact ? 'pl-2.5 pr-2' : 'gap-3 pl-4 pr-3.5',
           isDragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className={cn('flex min-w-0 flex-1 items-center', isUltraCompact ? 'gap-2' : 'gap-3')}>
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
@@ -189,20 +192,36 @@ export function TaskBlock({
             aria-label={`${task.title} imgesini değiştir`}
             title="İmgeyi / bloğu düzenle"
             className={cn(
-              'flex shrink-0 items-center justify-center rounded-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              isCompact ? 'size-5' : 'size-7',
-              isBuffer ? 'bg-white/[0.04] text-muted-foreground' : iconMeta.badgeClass,
+              'flex shrink-0 items-center justify-center transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              isUltraCompact
+                ? 'size-4 rounded'
+                : isCompact
+                  ? 'size-5 rounded-md'
+                  : 'size-7 rounded-lg',
+              iconMeta.badgeClass,
             )}
           >
-            <TaskIcon className={cn(isCompact ? 'size-3 stroke-[2]' : 'size-4 stroke-[2]')} />
+            <TaskIcon
+              className={cn(
+                isUltraCompact
+                  ? 'size-2.5 stroke-[2]'
+                  : isCompact
+                    ? 'size-3 stroke-[2]'
+                    : 'size-4 stroke-[2]',
+              )}
+            />
           </button>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
             <span className="flex w-full items-center gap-1.5">
               <span
                 className={cn(
-                  'truncate font-semibold leading-tight text-foreground',
-                  isCompact ? 'text-xs' : 'text-[13.5px]',
+                  'truncate font-semibold text-foreground',
+                  isUltraCompact
+                    ? 'text-[11px] leading-none'
+                    : isCompact
+                      ? 'text-xs leading-tight'
+                      : 'text-[13.5px] leading-tight',
                   isBuffer && 'font-normal text-muted-foreground',
                 )}
               >
@@ -212,7 +231,7 @@ export function TaskBlock({
                 <Lock className="size-3 shrink-0 text-muted-foreground" aria-label="Sabit" />
               )}
               {isCompact && !isDragging && (
-                <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
+                <span className="ml-auto shrink-0 font-mono text-[10px] leading-none text-muted-foreground">
                   {startLabel} – {endLabel} · {formatDuration(duration)}
                 </span>
               )}
@@ -239,16 +258,17 @@ export function TaskBlock({
             }}
             aria-label={`${task.title} bloğunu düzenle`}
             className={cn(
-              'flex size-6 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-muted-foreground transition-all hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              'flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-muted-foreground transition-all hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              isUltraCompact ? 'size-4' : 'size-6',
               isSelected
                 ? 'opacity-100'
                 : 'pointer-events-none opacity-0 group-hover/block:pointer-events-auto group-hover/block:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100',
             )}
           >
-            <Pencil className="size-3" />
+            <Pencil className={cn(isUltraCompact ? 'size-2.5' : 'size-3')} />
           </button>
 
-          {!isBuffer && onToggleComplete && (
+          {onToggleComplete && (
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
@@ -262,13 +282,14 @@ export function TaskBlock({
                   : `${task.title} tamamlandı olarak işaretle`
               }
               className={cn(
-                'flex size-6 shrink-0 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                'flex shrink-0 items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                isUltraCompact ? 'size-4' : 'size-6',
                 task.isCompleted
                   ? 'border-primary bg-primary/15 text-primary shadow-[0_0_12px_rgba(46,230,184,0.3)]'
                   : 'border-white/20 bg-transparent text-transparent hover:border-primary/60 hover:text-primary/40',
               )}
             >
-              <Check className="size-3.5 stroke-[2.5]" />
+              <Check className={cn(isUltraCompact ? 'size-2.5 stroke-[2.5]' : 'size-3.5 stroke-[2.5]')} />
             </button>
           )}
         </div>
