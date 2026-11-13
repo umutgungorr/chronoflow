@@ -2,8 +2,9 @@
  * Odak modu ve bildirim mantığı — saf fonksiyonlar, "şimdi" parametre.
  */
 
-import { getEndMinutes, getStartMinutes, isTaskOnDay, toDayMinutes } from '@/lib/time';
-import type { Task } from '@/types';
+import { DAY_END_MINUTE } from '@/lib/constants';
+import { dayKey, getEndMinutes, getStartMinutes, isTaskOnDay, toDayMinutes } from '@/lib/time';
+import type { Task, TaskCategory } from '@/types';
 
 /** Alt görev. Bloğa bağlıdır; ayrı bir listede (taskId → liste) tutulur. */
 export type Subtask = {
@@ -11,6 +12,43 @@ export type Subtask = {
   title: string;
   done: boolean;
 };
+
+/** Canlı odak oturumu: başlangıç anından bitiş anına kadar ChronoFlow takviminde canlı blok olarak yaşar. */
+export type ActiveFocusSession = {
+  taskId: string;
+  title: string;
+  category: TaskCategory;
+  startedAt: string;
+  startMinute: number;
+  dayKey: string;
+  dailyGoalId?: string;
+};
+
+export const DEFAULT_FOCUS_SUBJECTS: string[] = [
+  'Paragraf',
+  'Matematik',
+  'Problemler',
+  'Geometri',
+  'Türkçe',
+  'Fizik',
+  'Kimya',
+  'Biyoloji',
+  'Tarih',
+  'Coğrafya',
+  'Deneme Analizi',
+  'Kodlama',
+];
+
+/**
+ * Canlı odak oturumunun verilen `now` anındaki bitiş dakikasını hesaplar.
+ * Aynı gün içinde en az `startMinute + 1` (en az 1 dk), gün devrilmişse `DAY_END_MINUTE` (24:00) döner.
+ */
+export function computeFocusEndMinute(session: ActiveFocusSession, now: Date): number {
+  if (dayKey(now) !== session.dayKey) {
+    return DAY_END_MINUTE;
+  }
+  return Math.min(DAY_END_MINUTE, Math.max(session.startMinute + 1, toDayMinutes(now)));
+}
 
 /** Şu an süren blok (tampon hariç). Çakışma varsa en geç başlayan. */
 export function findActiveTask(tasks: Task[], now: Date): Task | null {

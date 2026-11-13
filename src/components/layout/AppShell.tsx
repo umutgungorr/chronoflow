@@ -4,10 +4,13 @@ import type { ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarRange, Flame, LayoutGrid, ShieldCheck, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { CalendarRange, Check, Flame, LayoutGrid, ShieldCheck, Sparkles, Target, TrendingUp } from 'lucide-react';
 
+import { useFocusSessionSync } from '@/hooks/use-focus-session-sync';
 import { useIsAdmin } from '@/hooks/use-is-admin';
+import { formatTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { useTaskStore } from '@/store/useTaskStore';
 
 const ITEMS = [
   { href: '/', label: 'Plan', icon: LayoutGrid },
@@ -42,11 +45,18 @@ function Logo({ className }: { className?: string }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
+  useFocusSessionSync();
+  const activeFocusSession = useTaskStore((s) => s.activeFocusSession);
+  const stopFocusSession = useTaskStore((s) => s.stopFocusSession);
+
   const items = isAdmin
     ? [...ITEMS, ADMIN_ITEM, MOTIVATION_ITEM]
     : [...ITEMS, MOTIVATION_ITEM];
 
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));
+  const focusStartText = activeFocusSession
+    ? formatTime(new Date(activeFocusSession.startedAt))
+    : null;
 
   return (
     <div className="flex h-dvh flex-col lg:flex-row">
@@ -103,6 +113,42 @@ export function AppShell({ children }: { children: ReactNode }) {
           pathname === '/' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto',
         )}
       >
+        {activeFocusSession && pathname !== '/odak' && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-primary/30 bg-primary/10 px-4 py-2 text-xs backdrop-blur">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="relative flex size-2.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
+              </span>
+              <Flame className="size-3.5 shrink-0 text-primary" aria-hidden />
+              <span className="truncate font-semibold text-foreground">
+                Canlı Odak: {activeFocusSession.title}
+              </span>
+              {focusStartText && (
+                <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">
+                  ({focusStartText}&apos;den itibaren)
+                </span>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link
+                href="/odak"
+                className="rounded-lg border border-white/15 bg-background/60 px-2.5 py-1 font-medium text-foreground transition-colors hover:border-primary/50 hover:text-primary"
+              >
+                Odağa Git
+              </Link>
+              <button
+                type="button"
+                onClick={() => stopFocusSession()}
+                className="flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <Check className="size-3" />
+                Bitir &amp; Tikle
+              </button>
+            </div>
+          </div>
+        )}
         {children}
       </div>
 

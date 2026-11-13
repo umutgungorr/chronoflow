@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { GUN, gorev, harita } from '@/lib/test-utils';
-import { getStartMinutes } from '@/lib/time';
+import { getEndMinutes, getStartMinutes } from '@/lib/time';
 import { useTaskStore } from '@/store/useTaskStore';
 
 /** Her testten önce store'u bilinen bir başlangıca çeker. */
@@ -13,6 +13,8 @@ function kur(tasks = [gorev('a', '09:00', 60), gorev('b', '14:00', 60)]) {
     editor: null,
     feedback: null,
     dayTitles: {},
+    dailyGoals: [],
+    activeFocusSession: null,
     lastKnownToday: '2026-08-15',
     history: [],
   });
@@ -256,5 +258,64 @@ describe('gün başlangıç saati', () => {
 
     useTaskStore.getState().applyMagicSchedule('2 saat kod', { withBuffers: false });
     expect(getStartMinutes(gorevler()[0]!)).toBe(9 * 60);
+  });
+});
+
+describe('canlı odak oturumu', () => {
+  it('o anki dakikadan başlayan blok oluşturur, ilerledikçe uzatır ve bitirince tikli kapatır', () => {
+    kur([]);
+    const startAt = new Date(2026, 7, 15, 13, 29, 0);
+    const taskId = useTaskStore.getState().startFocusSession({
+      title: 'Paragraf',
+      category: 'WORK',
+      now: startAt,
+    });
+
+    expect(taskId).not.toBeNull();
+    expect(useTaskStore.getState().activeFocusSession?.taskId).toBe(taskId);
+
+    const created = gorevler().find((t) => t.id === taskId)!;
+    expect(created.title).toBe('Paragraf');
+    expect(created.isCompleted).toBe(false);
+    expect(getStartMinutes(created)).toBe(13 * 60 + 29);
+    expect(getEndMinutes(created)).toBe(13 * 60 + 30);
+
+    // Odak sürerken zaman ilerlediğinde bitiş dakikası da ilerler
+    useTaskStore.getState().syncActiveFocusSession(new Date(2026, 7, 15, 13, 45, 0));
+    const synced = gorevler().find((t) => t.id === taskId)!;
+    expect(getEndMinutes(synced)).toBe(13 * 60 + 45);
+    expect(synced.isCompleted).toBe(false);
+
+    // Bitirdiğinde o anki dakikada durur ve tikli (isCompleted: true) kapanır
+    const finalized = useTaskStore
+      .getState()
+      .stopFocusSession(new Date(2026, 7, 15, 14, 12, 0));
+    expect(finalized).not.toBeNull();
+    expect(finalized?.isCompleted).toBe(true);
+    expect(getStartMinutes(finalized!)).toBe(13 * 60 + 29);
+    expect(getEndMinutes(finalized!)).toBe(14 * 60 + 12);
+    expect(useTaskStore.getState().activeFocusSession).toBeNull();
+  });
+
+  it('günlük hedeften başlatılan odak bitince ilgili günlük hedefi de tikler', () => {
+    kur([]);
+    const goalId = useTaskStore.getState().addDailyGoal({
+      title: 'Paragraf 40 soru',
+      category: 'WORK',
+      date: '2026-08-15',
+    });
+
+    const startAt = new Date(2026, 7, 15, 10, 15, 0);
+    useTaskStore.getState().startFocusSession({
+      title: 'Paragraf 40 soru',
+      category: 'WORK',
+      dailyGoalId: goalId,
+      now: startAt,
+    });
+
+    useTaskStore.getState().stopFocusSession(new Date(2026, 7, 15, 10, 52, 0));
+
+    const goal = useTaskStore.getState().dailyGoals.find((g) => g.id === goalId);
+    expect(goal?.isCompleted).toBe(true);
   });
 });

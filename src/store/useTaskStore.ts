@@ -25,15 +25,22 @@ import {
 import {
   clampStart,
   dayKey,
+  formatTime,
   fromDayMinutes,
   getDurationMinutes,
+  getEndMinutes,
   getStartMinutes,
   isTaskOnDay,
   snapMinutes,
   toDayMinutes,
 } from '@/lib/time';
 import type { DailyGoal, Goal } from '@/lib/goals';
-import type { Subtask } from '@/lib/focus';
+import {
+  computeFocusEndMinute,
+  DEFAULT_FOCUS_SUBJECTS,
+  type ActiveFocusSession,
+  type Subtask,
+} from '@/lib/focus';
 import {
   DAY_TEMPLATES,
   placeBlocks,
@@ -109,6 +116,10 @@ type TaskState = {
   dayStartHour: number;
   /** Rutinlerin tamamlanma kayıtları (dayKey → routineId[]). */
   routineCompleted: Record<string, string[]>;
+  /** Odak modunda şu an süren canlı oturum (varsa). */
+  activeFocusSession: ActiveFocusSession | null;
+  /** Odak modunda hızlı seçim için kayıtlı ders/konu çipleri. */
+  focusSubjects: string[];
 };
 
 /** Geçmişteki bir kare: o andaki plan + ne yapıldığının adı. */
@@ -207,6 +218,19 @@ type TaskActions = {
   /** Bugünün ilk uygun boşluğuna 1 saatlik bir blok koyar (hedeften plana). */
   addGoalBlock: (title: string) => boolean;
 
+  /* — Canlı Odak Oturumu — */
+  startFocusSession: (input: {
+    title: string;
+    category?: TaskCategory;
+    dailyGoalId?: string;
+    now?: Date;
+  }) => string | null;
+  syncActiveFocusSession: (now?: Date) => void;
+  stopFocusSession: (now?: Date) => Task | null;
+  cancelFocusSession: () => void;
+  addFocusSubject: (subject: string) => void;
+  removeFocusSubject: (subject: string) => void;
+
   /* — Yardımcılar — */
   resetToMock: () => void;
   clearDay: () => void;
@@ -294,6 +318,8 @@ export const useTaskStore = create<TaskStore>()(
       routineApplied: {},
       dayStartHour: DEFAULT_DAY_START_HOUR,
       routineCompleted: {},
+      activeFocusSession: null,
+      focusSubjects: DEFAULT_FOCUS_SUBJECTS,
 
       /* ---------------------------------------------------------------- */
       setSelectedDate: (date) => set({ selectedDate: startOfDay(date) }),
@@ -353,15 +379,21 @@ export const useTaskStore = create<TaskStore>()(
           selectedTaskId: s.selectedTaskId === id ? null : s.selectedTaskId,
           // Silinen görev düzenleniyorsa pencere de kapanmalı.
           editor: s.editor?.mode === 'edit' && s.editor.taskId === id ? null : s.editor,
+          activeFocusSession: s.activeFocusSession?.taskId === id ? null : s.activeFocusSession,
         })),
 
-      toggleComplete: (id) =>
+      toggleComplete: (id) => {
+        if (get().activeFocusSession?.taskId === id) {
+          get().stopFocusSession();
+          return;
+        }
         set((s) => ({
           ...snapshot(s, 'tamamlandı işareti'),
           tasks: s.tasks.map((t) =>
             t.id === id ? { ...t, isCompleted: !t.isCompleted } : t,
           ),
-        })),
+        }));
+      },
 
       toggleFixed: (id) =>
         set((s) => ({
@@ -803,6 +835,158 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       /* ---------------------------------------------------------------- */
+      startFocusSession: (input) => {
+        const clean = input.title.trim().slice(0, 120);
+        if (!clean) return null;
+
+        const now = input.now ?? new Date();
+        if (get().activeFocusSession) {
+          get().stopFocusSession(now);
+        }
+
+        const state = get();
+        const today = startOfDay(now);
+        const startMin = Math.min(DAY_END_MINUTE - 1, Math.max(0, toDayMinutes(now)));
+        const endMin = Math.min(DAY_END_MINUTE, startMin + 1);
+        const id = createId();
+        const category = input.category ?? 'WORK';
+
+        const task: Task = {
+          id,
+          title: clean,
+          startTime: fromDayMinutes(today, startMin),
+          endTime: fromDayMinutes(today, endMin),
+          category,
+          isCompleted: false,
+          isFixed: false,
+        };
+
+        const session: ActiveFocusSession = {
+          taskId: id,
+          title: clean,
+          category,
+          startedAt: now.toISOString(),
+          startMinute: startMin,
+          dayKey: dayKey(now),
+          dailyGoalId: input.dailyGoalId,
+        };
+
+        set({
+          ...snapshot(state, 'canlı odak başlatıldı'),
+          tasks: sortByStart([...state.tasks, task]),
+          activeFocusSession: session,
+          selectedDate: today,
+          feedback: {
+            message: `"${clean}" odak oturumu ${formatTime(task.startTime)} itibarıyla başlatıldı.`,
+            tone: 'info',
+          },
+        });
+        return id;
+      },
+
+      syncActiveFocusSession: (now) => {
+        const state = get();
+        const session = state.activeFocusSession;
+        if (!session) return;
+
+        const target = state.tasks.find((t) => t.id === session.taskId);
+        if (!target) {
+          set({ activeFocusSession: null });
+          return;
+        }
+
+        const endMin = computeFocusEndMinute(session, now ?? new Date());
+        if (getEndMinutes(target) === endMin) return;
+
+        set({
+          tasks: sortByStart(
+            state.tasks.map((t) =>
+              t.id === session.taskId ? { ...t, endTime: fromDayMinutes(t.startTime, endMin) } : t,
+            ),
+          ),
+        });
+      },
+
+      stopFocusSession: (now) => {
+        const state = get();
+        const session = state.activeFocusSession;
+        if (!session) return null;
+
+        const currentNow = now ?? new Date();
+        const endMin = computeFocusEndMinute(session, currentNow);
+        const existing = state.tasks.find((t) => t.id === session.taskId);
+        if (!existing) {
+          set({ activeFocusSession: null });
+          return null;
+        }
+
+        const finalized: Task = {
+          ...existing,
+          endTime: fromDayMinutes(existing.startTime, endMin),
+          isCompleted: true,
+        };
+
+        const nextTasks = sortByStart(
+          state.tasks.map((t) => (t.id === session.taskId ? finalized : t)),
+        );
+        const nextDailyGoals = session.dailyGoalId
+          ? (state.dailyGoals ?? []).map((g) =>
+              g.id === session.dailyGoalId ? { ...g, isCompleted: true } : g,
+            )
+          : state.dailyGoals;
+
+        set({
+          ...snapshot(state, 'odak tamamlandı'),
+          tasks: nextTasks,
+          dailyGoals: nextDailyGoals,
+          activeFocusSession: null,
+          feedback: {
+            message: `"${session.title}" odak bloğu (${formatTime(finalized.startTime)} – ${formatTime(finalized.endTime)}) tamamlandı ve tiklendi.`,
+            tone: 'info',
+          },
+        });
+        return finalized;
+      },
+
+      cancelFocusSession: () => {
+        const state = get();
+        const session = state.activeFocusSession;
+        if (!session) return;
+
+        set({
+          tasks: state.tasks.filter((t) => t.id !== session.taskId),
+          activeFocusSession: null,
+          feedback: {
+            message: `"${session.title}" odak oturumu iptal edildi.`,
+            tone: 'info',
+          },
+        });
+      },
+
+      addFocusSubject: (subject) => {
+        const clean = subject.trim().slice(0, 50);
+        if (!clean) return;
+        set((s) => {
+          const list = s.focusSubjects ?? DEFAULT_FOCUS_SUBJECTS;
+          if (
+            list.some(
+              (item) => item.toLocaleLowerCase('tr-TR') === clean.toLocaleLowerCase('tr-TR'),
+            )
+          ) {
+            return {};
+          }
+          return { focusSubjects: [...list, clean] };
+        });
+      },
+
+      removeFocusSubject: (subject) =>
+        set((s) => ({
+          focusSubjects: (s.focusSubjects ?? DEFAULT_FOCUS_SUBJECTS).filter(
+            (item) => item !== subject,
+          ),
+        })),
+
+      /* ---------------------------------------------------------------- */
       resetToMock: () =>
         set((s) => ({
           ...snapshot(s, 'örnek plan yüklendi'),
@@ -851,6 +1035,8 @@ export const useTaskStore = create<TaskStore>()(
         routines: state.routines,
         routineApplied: state.routineApplied,
         dayStartHour: state.dayStartHour,
+        activeFocusSession: state.activeFocusSession,
+        focusSubjects: state.focusSubjects,
       }),
       // SSR ile client arasında hydration uyuşmazlığı olmaması için
       // localStorage okuması mount sonrasına ertelenir (bkz. useHydratedStore).
