@@ -1,39 +1,54 @@
 <div align="center">
 
-# ChronoFlow
+# ⏱️ ChronoFlow
 
-**Gününü zaman bloklarıyla planla, hedeflerini takip et ve odağını koru.**
+**Local-First Daily Time-Blocking, Cognitive Focus & Goal Scheduler**
 
-Next.js tabanlı, Türkçe ve local-first günlük planlama uygulaması.
+[![CI](https://github.com/umutgungorr/chronoflow/actions/workflows/ci.yml/badge.svg)](https://github.com/umutgungorr/chronoflow/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=next.js)](https://nextjs.org/)
+[![React 19](https://img.shields.io/badge/React-19-149eca?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Case Study](https://img.shields.io/badge/Case%20Study-umutgungorr.com-58a6ff)](https://umutgungorr.com/projects/chronoflow)
 
 </div>
 
-## Özellikler
+---
 
-- 15 dakikalık çözünürlükte sürükle-bırak zaman bloklama
-- Görevler arasında isteğe bağlı akıllı tampon süreleri
-- Serbest Türkçe metni günlük plana dönüştüren kural tabanlı planlayıcı
-- Günlük istatistikler ve kategori bazlı görünüm
-- Tarihli hedefler ve kalan süre takibi
-- Geri alma desteği ve otomatik gün geçişi
-- Açık/koyu tema ve kurulabilir PWA deneyimi
-- Local-first kullanım; Supabase ile isteğe bağlı giriş ve senkronizasyon
-- Yönetim ekranı ve giriş yapmış kullanıcılar için sınırlı ziyaret istatistikleri
+## Overview
 
-## Teknoloji yığını
+**ChronoFlow** is a local-first, offline-capable daily time-blocking and focus planner built with **Next.js 16**, **React 19**, **TypeScript**, **Zustand**, and **Supabase**.
 
-| Katman | Teknolojiler |
-|---|---|
-| Uygulama | Next.js 16, React 19, TypeScript |
-| Arayüz | Tailwind CSS 4, Base UI, Lucide, dnd-kit |
-| Durum | Zustand |
-| Veri ve kimlik | Supabase |
-| Test ve kalite | Vitest, ESLint |
-| Ölçüm | Vercel Analytics |
+It is designed around a strict **zero-lock-in architecture**: the application boots and operates 100% locally via `localStorage` with deterministic conflict resolution, and seamlessly upgrades to multi-device cloud synchronization when Supabase credentials are provided.
 
-## Yerel kurulum
+---
 
-Gereksinimler: Node.js 20+ ve npm.
+## Key Capabilities
+
+- **15-Minute Tactile Time Grid:** Drag-and-drop block scheduling (`@dnd-kit`) with collision detection and automatic smart buffer insertion between deep-work sessions.
+- **Deterministic Natural-Language Parser ("Magic Schedule"):** Rule-based schedule parser that converts free-form text into structured daily time blocks with zero external LLM latency or API cost.
+- **Local-First Tombstone Sync Engine:** Offline-first state machine (`Zustand`) that reconciles local edits with Supabase using server-stamped `updated_at` LWW (Last-Write-Wins) and soft-delete tombstones (`deleted_at`) so deleted blocks never resurrect across devices.
+- **Horizon Goal Tracking:** Milestone and target-date tracker integrated directly alongside the daily execution grid.
+- **Defense-in-Depth Supabase RLS:** Strict Row-Level Security (`auth.uid() = user_id`), explicit `REVOKE ALL FROM anon`, and rate-limited server-side telemetry (`/api/visit`).
+
+---
+
+## System Architecture & Tech Stack
+
+| Layer | Technology | Role |
+| :--- | :--- | :--- |
+| **Framework** | Next.js 16 (App Router), React 19 | Server/Client hybrid rendering & PWA manifest |
+| **Language** | TypeScript 5 (Strict Mode) | End-to-end type safety across UI, store, and Supabase schema |
+| **State & Sync** | Zustand + Custom Sync Engine | Optimistic local mutations, undo stack, and bi-directional cloud sync |
+| **UI & Interaction** | Tailwind CSS 4, Base UI, `@dnd-kit`, Lucide | Accessible, keyboard-friendly 15-minute slot manipulation |
+| **Database & Auth** | Supabase (PostgreSQL + RLS) | Optional cloud persistence & multi-device synchronization |
+| **Quality Gate** | Vitest, Testing Library, ESLint 9 | Unit tests for scheduler math, collision layout, parser, and state stores |
+
+---
+
+## Quickstart (Local-First Mode)
+
+Requires **Node.js 20+** and `npm`.
 
 ```bash
 git clone https://github.com/umutgungorr/chronoflow.git
@@ -43,48 +58,54 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Uygulama varsayılan olarak `http://localhost:3000` adresinde açılır.
+Open `http://localhost:3000`. If `.env.local` is left empty, ChronoFlow runs entirely in **local-first browser storage mode** with zero external dependencies.
 
-Supabase değişkenlerini boş bırakırsan uygulama yerel modda çalışır. Veriler tarayıcının `localStorage` alanında tutulur; giriş ve cihazlar arası senkronizasyon devre dışı kalır.
+### Optional Cloud Sync (Supabase)
 
-## Ortam değişkenleri
+To enable cross-device sync, provide your Supabase project URL and publishable anon key in `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Supabase kullanacaksan `supabase/` klasöründeki SQL dosyalarını kendi projen üzerinde uygula.
+Then apply the SQL migrations in `supabase/` (`schema.sql`, `goals.sql`, `day-titles.sql`, `admin.sql`) via the Supabase SQL Editor.
 
-Gerçek anahtarları yalnızca `.env.local` içinde tut; bu dosya Git tarafından izlenmez. Ziyaret kaydı özelliği etkinleştirildiğinde yalnızca giriş yapmış kullanıcıların IP, user-agent, yol ve referer bilgileri yönetici görünümü için saklanır.
+---
 
-## Komutlar
+## Development & Verification Commands
 
 ```bash
-npm run dev       # geliştirme sunucusu
-npm run build     # üretim derlemesi
-npm run start     # üretim sunucusu
-npm run lint      # kod kalitesi kontrolü
-npm test          # testleri bir kez çalıştırır
-npm run test:watch
+npm run dev          # Start local development server
+npm run lint         # Run ESLint static checks
+npm test             # Run Vitest unit test suite (scheduler, layout, parser, store)
+npm run build        # Build production Next.js bundle
 ```
 
-## Proje yapısı
+---
+
+## Repository Structure
 
 ```text
-src/app/          sayfalar, API rotaları ve PWA tanımları
-src/components/   zaman çizelgesi, görev, hedef ve arayüz bileşenleri
-src/hooks/        günlük akış ve tarayıcı davranışları
-src/lib/          planlama, zaman ve Supabase mantığı
-src/store/        Zustand durum yönetimi
-src/types/        paylaşılan TypeScript tipleri
-supabase/         veritabanı şeması ve ek SQL tanımları
+src/
+├── app/             # Next.js App Router pages, PWA manifest & rate-limited /api/visit route
+├── components/      # Timeline grid, drag-and-drop task blocks, goal modals & layout primitives
+├── hooks/           # Day rollover, hydration guards, keyboard undo shortcuts & admin checks
+├── lib/             # Pure scheduling math, collision layout, natural-language parser & Supabase sync
+├── store/           # Zustand state stores (tasks, auth, admin) with unit tests
+└── types/           # Shared domain types
+supabase/            # Idempotent PostgreSQL schema, triggers & RLS policies
 ```
 
-## Durum
+---
 
-ChronoFlow aktif geliştirme aşamasında, açık kaynak bir portföy projesidir.
+## Case Study & Architecture Deep Dive
 
-## Geliştirici ve vaka çalışması
+Read the full engineering case study, architectural trade-offs, and design decisions on **[umutgungorr.com/projects/chronoflow](https://umutgungorr.com/projects/chronoflow)**.
 
-ChronoFlow, Umut Güngör’ün açık kaynak projelerinden biridir. Uygulamanın amacı, teknik tercihleri ve mevcut sınırları için [proje vaka çalışmasına](https://umutgungorr.com/projects/chronoflow) göz atın. Diğer çalışmaları [umutgungorr.com](https://umutgungorr.com/) adresinde görebilirsiniz.
+---
+
+## License
+
+Licensed under the [MIT License](LICENSE).  
+Copyright (c) 2026 **Umut Güngör**.
