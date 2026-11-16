@@ -7,8 +7,133 @@
  */
 
 import { DAY_END_MINUTE, DAY_START_MINUTE, MIN_TASK_MINUTES } from '@/lib/constants';
-import { getDurationMinutes, getEndMinutes, getStartMinutes } from '@/lib/time';
+import { getDurationMinutes, getEndMinutes, getStartMinutes, isTaskOnDay } from '@/lib/time';
 import type { Task } from '@/types';
+
+export type MinuteRange = { start: number; end: number };
+
+function mergeMinuteRanges(ranges: MinuteRange[]): MinuteRange[] {
+  if (ranges.length === 0) return [];
+  const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: MinuteRange[] = [{ ...sorted[0]! }];
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i]!;
+    const last = merged[merged.length - 1]!;
+    if (cur.start <= last.end) {
+      last.end = Math.max(last.end, cur.end);
+    } else {
+      merged.push({ ...cur });
+    }
+  }
+  return merged;
+}
+
+/** Gündeki kilitli (tamamlanmış) blokların birleştirilmiş dakika aralıklarını döndürür. */
+export function getLockedRanges(
+  tasks: Task[],
+  day: Date,
+  excludeTaskId?: string,
+): MinuteRange[] {
+  const ranges: MinuteRange[] = [];
+  for (const t of tasks) {
+    if (t.id === excludeTaskId || !t.isCompleted || !isTaskOnDay(t, day)) continue;
+    ranges.push({ start: getStartMinutes(t), end: getEndMinutes(t) });
+  }
+  return mergeMinuteRanges(ranges);
+}
+
+/**
+ * Taşınan bloğun başlangıcını kilitli aralıklarla çakışmayan en yakın geçerli
+ * konuma oturtur. Gün içinde bloğun sığabileceği boşluk yoksa `null` döner.
+ */
+export function snapStartOutsideRanges(
+  desiredStart: number,
+  duration: number,
+  locked: MinuteRange[],
+  minStart: number = DAY_START_MINUTE,
+): number | null {
+  const merged = mergeMinuteRanges(locked);
+  const gaps: MinuteRange[] = [];
+  let cursor = minStart;
+
+  for (const block of merged) {
+    if (block.end <= cursor) continue;
+    if (block.start > cursor) {
+      const gapEnd = Math.min(block.start, DAY_END_MINUTE);
+      if (gapEnd - cursor >= duration) {
+        gaps.push({ start: cursor, end: gapEnd });
+      }
+    }
+    cursor = Math.max(cursor, block.end);
+    if (cursor >= DAY_END_MINUTE) break;
+  }
+
+  if (DAY_END_MINUTE - cursor >= duration) {
+    gaps.push({ start: cursor, end: DAY_END_MINUTE });
+  }
+
+  if (gaps.length === 0) return null;
+
+  let bestStart = gaps[0]!.start;
+  let bestDistance = Infinity;
+
+  for (const gap of gaps) {
+    const candidate = Math.max(gap.start, Math.min(desiredStart, gap.end - duration));
+    const distance = Math.abs(candidate - desiredStart);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestStart = candidate;
+    }
+  }
+
+  return bestStart;
+}
+
+export function clampEndOutsideRanges(
+  start: number,
+  rawEnd: number,
+  locked: MinuteRange[],
+): number {
+  const merged = mergeMinuteRanges(locked);
+  const wall = merged.find((r) => r.start >= start + MIN_TASK_MINUTES)?.start ?? DAY_END_MINUTE;
+  const maxEnd = Math.min(DAY_END_MINUTE, wall);
+  return Math.min(maxEnd, Math.max(start + MIN_TASK_MINUTES, rawEnd));
+}
+
+export function clampStartOutsideRanges(
+  rawStart: number,
+  end: number,
+  locked: MinuteRange[],
+  minStart: number = DAY_START_MINUTE,
+): number {
+  const merged = mergeMinuteRanges(locked);
+  let floor = minStart;
+  for (const r of merged) {
+    if (r.end <= end - MIN_TASK_MINUTES) {
+      floor = Math.max(floor, r.end);
+    }
+  }
+  return Math.max(floor, Math.min(rawStart, end - MIN_TASK_MINUTES));
+}
+
+/**
+ * Boş bir noktaya tıklandığında 15dk yuvarlama komşu bloğun içine düşerse
+ * başlangıcı hemen o bloğun bitişine kaydırır.
+ */
+export function resolveSlotStart(tasks: Task[], day: Date, snappedMinute: number): number {
+  const sameDay = tasks
+    .filter((t) => isTaskOnDay(t, day))
+    .map((t) => ({ start: getStartMinutes(t), end: getEndMinutes(t) }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  let candidate = snappedMinute;
+  for (const block of sameDay) {
+    if (block.start <= candidate && candidate < block.end) {
+      candidate = block.end;
+    }
+  }
+  return Math.min(candidate, DAY_END_MINUTE - MIN_TASK_MINUTES);
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Sürükleme önizlemesi                                                      */
@@ -39,6 +164,7 @@ export function applyDragPreview(
   task: Task,
   preview: DragPreview | null,
   minStart: number = DAY_START_MINUTE,
+  lockedRanges: MinuteRange[] = [],
 ): Placement {
   const start = getStartMinutes(task);
   const duration = getDurationMinutes(task);
@@ -50,26 +176,29 @@ export function applyDragPreview(
   const delta = preview.deltaMinutes;
 
   switch (preview.mode) {
-    case 'move':
-      // Taşımada süre korunur; yalnızca başlangıç kayar ve gün dışına taşamaz.
-      return {
-        start: Math.min(Math.max(minStart, start + delta), DAY_END_MINUTE - duration),
-        duration,
-      };
+    case 'move': {
+      // Taşımada süre korunur; gün sınırları ve tamamlanmış bloklarla çakışmaz.
+      const clamped = Math.min(Math.max(minStart, start + delta), DAY_END_MINUTE - duration);
+      if (lockedRanges.length === 0) {
+        return { start: clamped, duration };
+      }
+      const safeStart = snapStartOutsideRanges(clamped, duration, lockedRanges, minStart);
+      return { start: safeStart ?? start, duration };
+    }
 
     case 'resize-end': {
-      // Alt kenar: başlangıç sabit, süre değişir. En az 15dk, en fazla gün sonu.
-      const maxDuration = DAY_END_MINUTE - start;
+      // Alt kenar: başlangıç sabit, süre değişir. En az 15dk, en fazla gün sonu / kilitli blok.
+      const nextEnd = clampEndOutsideRanges(start, start + duration + delta, lockedRanges);
       return {
         start,
-        duration: Math.min(maxDuration, Math.max(MIN_TASK_MINUTES, duration + delta)),
+        duration: nextEnd - start,
       };
     }
 
     case 'resize-start': {
       // Üst kenar: BİTİŞ sabit kalır, başlangıç kayar → süre ters yönde değişir.
       const end = start + duration;
-      const nextStart = Math.max(minStart, Math.min(start + delta, end - MIN_TASK_MINUTES));
+      const nextStart = clampStartOutsideRanges(start + delta, end, lockedRanges, minStart);
       return { start: nextStart, duration: end - nextStart };
     }
   }

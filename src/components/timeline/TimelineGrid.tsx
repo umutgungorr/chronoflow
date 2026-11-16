@@ -22,7 +22,9 @@ import { useCurrentMinute } from '@/hooks/use-current-minute';
 import { DAY_END_MINUTE, GUTTER_WIDTH_PX, PX_PER_MINUTE } from '@/lib/constants';
 import {
   applyDragPreview,
+  getLockedRanges,
   layoutOverlaps,
+  resolveSlotStart,
   type DragMode,
   type DragPreview,
 } from '@/lib/layout';
@@ -115,13 +117,16 @@ export function TimelineGrid() {
   const timelineHeightPx = durationToPx(DAY_END_MINUTE - startMinute);
 
   const commit = (taskId: string, mode: DragMode, deltaMinutes: number) => {
-    const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
+    const allLiveTasks = useTaskStore.getState().tasks;
+    const task = allLiveTasks.find((t) => t.id === taskId);
     if (!task || task.isCompleted) return;
 
+    const locked = getLockedRanges(allLiveTasks, day, taskId);
     const { start, duration } = applyDragPreview(
       task,
       { taskId, mode, deltaMinutes },
       startMinute,
+      locked,
     );
 
     if (mode === 'move') moveTask(taskId, start);
@@ -193,6 +198,7 @@ export function TimelineGrid() {
 
   // Çakışan bloklar yan yana dizilir (sabit görev zinciri kırınca oluşur).
   const laidOut = useMemo(() => layoutOverlaps(tasks), [tasks]);
+  const lockedRanges = useMemo(() => getLockedRanges(tasks, day), [tasks, day]);
 
   return (
     <div
@@ -215,6 +221,7 @@ export function TimelineGrid() {
             day={day}
             startMinute={startMinute}
             disabled={preview !== null}
+            resolveStart={(snapped) => resolveSlotStart(allTasks, day, snapped)}
             getDuration={(start) => getAvailableDuration(allTasks, day, start, 60)}
             // Boş dilime tıklamak bloğu HEMEN oluşturmaz; saat/süre ön dolu
             // pencereyi açar. İptal edilirse ortada artık blok kalmaz.
@@ -271,6 +278,7 @@ export function TimelineGrid() {
                   laneCount={laneCount}
                   isSelected={task.id === selectedTaskId}
                   preview={preview?.taskId === task.id ? preview : null}
+                  lockedRanges={lockedRanges}
                   onSelect={handleSelect}
                   onOpen={openEditEditor}
                   onNudge={commit}

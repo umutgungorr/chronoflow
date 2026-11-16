@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyDragPreview, layoutOverlaps, type DragPreview } from '@/lib/layout';
-import { gorev } from '@/lib/test-utils';
+import {
+  applyDragPreview,
+  layoutOverlaps,
+  resolveSlotStart,
+  type DragPreview,
+} from '@/lib/layout';
+import { GUN, gorev } from '@/lib/test-utils';
 
 const onizleme = (
   taskId: string,
@@ -98,6 +103,28 @@ describe('applyDragPreview', () => {
       start: 540,
       duration: 120,
     });
+  });
+
+  it('kilitli (tamamlanmış) bloğun üstüne taşırken çakışmayan en yakın yere yapışır', () => {
+    const mat = gorev('mat', '14:56', 60);
+    const locked = [{ start: 13 * 60 + 35, end: 14 * 60 + 42 }]; // 13:35 - 14:42
+
+    // 15dk yukarı çekilince 14:41 yerine 14:42'ye hizalanır, çakışıp yan yana bölünmez
+    expect(applyDragPreview(mat, onizleme('mat', 'move', -15), 0, locked)).toEqual({
+      start: 14 * 60 + 42,
+      duration: 60,
+    });
+
+    // Üst kenarı çekince de 14:42'de durur
+    expect(applyDragPreview(mat, onizleme('mat', 'resize-start', -30), 0, locked)).toEqual({
+      start: 14 * 60 + 42,
+      duration: 74,
+    });
+  });
+
+  it('boş alana tıklayınca 15dk yuvarlama üstteki bloğa düşerse bitişine kaydırır', () => {
+    const tasks = [gorev('mat', '13:35', 62)]; // 13:35 - 14:37
+    expect(resolveSlotStart(tasks, GUN, 14 * 60 + 30)).toBe(14 * 60 + 37);
   });
 });
 

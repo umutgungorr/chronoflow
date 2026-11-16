@@ -7,11 +7,18 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   DAY_END_MINUTE,
+  DAY_START_MINUTE,
   DEFAULT_DAY_START_HOUR,
   MAX_DAY_START_HOUR,
   MIN_TASK_MINUTES,
   STORAGE_KEY,
 } from '@/lib/constants';
+import {
+  clampEndOutsideRanges,
+  clampStartOutsideRanges,
+  getLockedRanges,
+  snapStartOutsideRanges,
+} from '@/lib/layout';
 import { parseSchedulePrompt, planIntoDay } from '@/lib/magic-schedule';
 import { createMockTasks } from '@/lib/mock-data';
 import {
@@ -452,7 +459,18 @@ export const useTaskStore = create<TaskStore>()(
         const duration = getDurationMinutes(task);
         // Sürükleme katmanı zaten 15dk adımı uygular; mutlak dakikayı zorla
         // yuvarlamıyoruz ki kullanıcının 09:47 gibi tam dakikalı blokları bozulmasın.
-        const nextStart = clampStart(Math.round(startMinutes), duration);
+        const desiredStart = clampStart(Math.round(startMinutes), duration);
+        const locked = getLockedRanges(state.tasks, task.startTime, id);
+        const nextStart = snapStartOutsideRanges(desiredStart, duration, locked, DAY_START_MINUTE);
+        if (nextStart === null) {
+          set({
+            feedback: {
+              message: 'Tamamlanan blokların arasında bu blok için yeterli boşluk yok.',
+              tone: 'warning',
+            },
+          });
+          return;
+        }
         if (nextStart === getStartMinutes(task)) return;
 
         const moved = state.tasks.map((t) =>
@@ -475,18 +493,16 @@ export const useTaskStore = create<TaskStore>()(
         const targetMinute = Math.round(minute);
         const start = getStartMinutes(task);
         const end = start + getDurationMinutes(task);
+        const locked = getLockedRanges(state.tasks, task.startTime, id);
 
         let next: Task;
         if (edge === 'end') {
-          // Alt kenar: bitiş en az 15dk başlangıçtan sonra olmalı.
-          const nextEnd = Math.min(
-            DAY_END_MINUTE,
-            Math.max(start + MIN_TASK_MINUTES, targetMinute),
-          );
+          // Alt kenar: bitiş en az 15dk başlangıçtan sonra ve tamamlanan bloğu aşamaz.
+          const nextEnd = clampEndOutsideRanges(start, targetMinute, locked);
           next = withDuration(task, nextEnd - start);
         } else {
-          // Üst kenar: başlangıç kayar, bitiş sabit kalır.
-          const nextStart = Math.max(0, Math.min(targetMinute, end - MIN_TASK_MINUTES));
+          // Üst kenar: başlangıç kayar, bitiş sabit kalır, tamamlanan bloğun üstüne binmez.
+          const nextStart = clampStartOutsideRanges(targetMinute, end, locked, DAY_START_MINUTE);
           next = {
             ...task,
             startTime: fromDayMinutes(task.startTime, nextStart),

@@ -347,4 +347,20 @@ describe('tamamlanan blok koruması', () => {
     expect(getStartMinutes(t)).toBe(11 * 60);
     expect(getEndMinutes(t)).toBe(12 * 60);
   });
+
+  it('tamamlanan bloğun üstüne başka blok sürüklenince çakışmaz, bitişine hizalanır', () => {
+    kur([
+      gorev('done', '13:35', 67, { isCompleted: true }), // 13:35 - 14:42
+      gorev('next', '14:56', 60),
+    ]);
+
+    useTaskStore.getState().moveTask('next', 14 * 60 + 41);
+
+    const done = gorevler().find((t) => t.id === 'done')!;
+    const next = gorevler().find((t) => t.id === 'next')!;
+    expect(getStartMinutes(done)).toBe(13 * 60 + 35);
+    expect(getEndMinutes(done)).toBe(14 * 60 + 42);
+    expect(getStartMinutes(next)).toBe(14 * 60 + 42);
+    expect(getEndMinutes(next)).toBe(15 * 60 + 42);
+  });
 });

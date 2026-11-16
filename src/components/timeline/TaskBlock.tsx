@@ -5,7 +5,12 @@ import { Check, Lock, Pencil } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
 import { DAY_START_MINUTE } from '@/lib/constants';
-import { applyDragPreview, type DragMode, type DragPreview } from '@/lib/layout';
+import {
+  applyDragPreview,
+  type DragMode,
+  type DragPreview,
+  type MinuteRange,
+} from '@/lib/layout';
 import { getTaskIconMeta } from '@/lib/task-icons';
 import {
   durationToPx,
@@ -34,6 +39,7 @@ type Props = {
   isSelected: boolean;
   /** Yalnızca bu blok sürükleniyorsa dolu gelir. */
   preview: DragPreview | null;
+  lockedRanges?: MinuteRange[];
   onSelect: (id: string) => void;
   /** Düzenleme penceresini açar (çift tık veya Enter). */
   onOpen: (id: string) => void;
@@ -51,6 +57,7 @@ export function TaskBlock({
   laneCount,
   isSelected,
   preview,
+  lockedRanges,
   onSelect,
   onOpen,
   onNudge,
@@ -70,7 +77,7 @@ export function TaskBlock({
    * blok, önizlenen dakikaya birebir denk gelen piksele yerleşir. Ekranda
    * gördüğün yer ile bırakınca kaydedilecek yer aynı olur.
    */
-  const { start, duration } = applyDragPreview(task, preview, startMinute);
+  const { start, duration } = applyDragPreview(task, preview, startMinute, lockedRanges);
   const top = minutesToY(start, startMinute);
   const height = durationToPx(duration);
 

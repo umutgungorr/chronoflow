@@ -19,6 +19,8 @@ type Props = {
   startMinute?: number;
   /** Bir blok sürüklenirken bu katman sessizleşir. */
   disabled?: boolean;
+  /** Yuvarlanan dakikayı mevcut blokların dışına düzeltir. */
+  resolveStart?: (snappedMinute: number) => number;
   /** Verilen başlangıç için oluşturulacak bloğun süresi (dk). */
   getDuration: (startMinute: number) => number;
   onCreate: (startMinute: number) => void;
@@ -39,16 +41,19 @@ export function SlotInteractionLayer({
   day,
   startMinute = DAY_START_MINUTE,
   disabled,
+  resolveStart,
   getDuration,
   onCreate,
 }: Props) {
   const [hoverMinute, setHoverMinute] = useState<number | null>(null);
 
+  const normalizeMinute = (raw: number) => (resolveStart ? resolveStart(raw) : raw);
+
   const handleMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     // Dokunmatik sürüklemede önizleme göstermiyoruz; yalnızca imleç.
     if (event.pointerType === 'touch') return;
     const rect = event.currentTarget.getBoundingClientRect();
-    setHoverMinute(yToSnappedMinutes(event.clientY - rect.top, startMinute));
+    setHoverMinute(normalizeMinute(yToSnappedMinutes(event.clientY - rect.top, startMinute)));
   };
 
   const previewDuration =
@@ -67,9 +72,11 @@ export function SlotInteractionLayer({
       onClick={(event) => {
         const minute =
           hoverMinute ??
-          yToSnappedMinutes(
-            event.clientY - event.currentTarget.getBoundingClientRect().top,
-            startMinute,
+          normalizeMinute(
+            yToSnappedMinutes(
+              event.clientY - event.currentTarget.getBoundingClientRect().top,
+              startMinute,
+            ),
           );
         if (minute >= startMinute && minute < DAY_END_MINUTE) onCreate(minute);
       }}
