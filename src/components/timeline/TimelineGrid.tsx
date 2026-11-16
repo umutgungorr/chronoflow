@@ -116,7 +116,7 @@ export function TimelineGrid() {
 
   const commit = (taskId: string, mode: DragMode, deltaMinutes: number) => {
     const task = useTaskStore.getState().tasks.find((t) => t.id === taskId);
-    if (!task) return;
+    if (!task || task.isCompleted) return;
 
     const { start, duration } = applyDragPreview(
       task,

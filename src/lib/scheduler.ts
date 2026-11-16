@@ -87,6 +87,12 @@ type RippleLog = {
   conflict: string | null;
 };
 
+function getImmovableReason(task: Task): string | null {
+  if (task.isCompleted) return 'tamamlandığı için';
+  if (task.isFixed) return 'sabit bir görev olduğu için';
+  return null;
+}
+
 /** Çapadan SONRAKİ blokları ileri iter. */
 function rippleForward(result: Task[], anchorIndex: number, log: RippleLog): void {
   // İmleç: bu dakikadan önce yeni bir blok başlayamaz.
@@ -120,8 +126,9 @@ function rippleForward(result: Task[], anchorIndex: number, log: RippleLog): voi
       continue; // cursor değişmez; kalan taşma bir sonraki bloğa uygulanır
     }
 
-    if (current.isFixed) {
-      log.conflict = `"${current.title}" sabit bir görev olduğu için kaydırılamadı; ${overflow} dakikalık çakışma var.`;
+    const immovableReason = getImmovableReason(current);
+    if (immovableReason) {
+      log.conflict = `"${current.title}" ${immovableReason} kaydırılamadı; ${overflow} dakikalık çakışma var.`;
       break;
     }
 
@@ -164,8 +171,9 @@ function rippleBackward(result: Task[], anchorIndex: number, log: RippleLog): vo
       continue;
     }
 
-    if (current.isFixed) {
-      log.conflict = `"${current.title}" sabit bir görev olduğu için kaydırılamadı; ${overflow} dakikalık çakışma var.`;
+    const immovableReason = getImmovableReason(current);
+    if (immovableReason) {
+      log.conflict = `"${current.title}" ${immovableReason} kaydırılamadı; ${overflow} dakikalık çakışma var.`;
       break;
     }
 

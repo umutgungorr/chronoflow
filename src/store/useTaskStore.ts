@@ -361,11 +361,25 @@ export const useTaskStore = create<TaskStore>()(
 
       updateTask: (id, patch) => {
         const state = get();
-        const next = state.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t));
+        const existing = state.tasks.find((t) => t.id === id);
+        if (!existing) return;
+
+        // Tamamlanan bloğun saatleri yanlışlıkla kaymasın diye kilitli kalır;
+        // kullanıcı önce tamamlandı tikini kaldırırsa saatlerini düzenleyebilir.
+        const staysCompleted = existing.isCompleted && patch.isCompleted !== false;
+        let safePatch = patch;
+        if (staysCompleted && (patch.startTime !== undefined || patch.endTime !== undefined)) {
+          const { startTime: _start, endTime: _end, ...rest } = patch;
+          void _start;
+          void _end;
+          safePatch = rest;
+        }
+
+        const next = state.tasks.map((t) => (t.id === id ? { ...t, ...safePatch } : t));
         let nextTaskIcons = state.taskIcons ?? {};
-        if ('icon' in patch) {
-          if (patch.icon) {
-            nextTaskIcons = { ...nextTaskIcons, [id]: patch.icon };
+        if ('icon' in safePatch) {
+          if (safePatch.icon) {
+            nextTaskIcons = { ...nextTaskIcons, [id]: safePatch.icon };
           } else {
             nextTaskIcons = Object.fromEntries(
               Object.entries(nextTaskIcons).filter(([key]) => key !== id),
@@ -375,7 +389,7 @@ export const useTaskStore = create<TaskStore>()(
 
         // Tek kural: saat neresinden değişirse değişsin (sürükleme, klavye,
         // düzenleme penceresi) tampon zinciri aynı şekilde işler.
-        const timeChanged = patch.startTime !== undefined || patch.endTime !== undefined;
+        const timeChanged = safePatch.startTime !== undefined || safePatch.endTime !== undefined;
         if (!timeChanged) {
           set({
             ...snapshot(state, 'blok düzenlendi'),
@@ -431,9 +445,9 @@ export const useTaskStore = create<TaskStore>()(
       moveTask: (id, startMinutes) => {
         const state = get();
         const task = state.tasks.find((t) => t.id === id);
-        // isFixed yalnızca OTOMATİK kaydırmayı (reflow) engeller. Kullanıcı
-        // bloğu eliyle sürüklüyorsa niyeti açıktır; buna izin veriyoruz.
-        if (!task) return;
+        // isFixed yalnızca OTOMATİK kaydırmayı (reflow) engeller; ancak
+        // tamamlanan bloklar yanlışlıkla sürüklenmesin diye yerinde kalır.
+        if (!task || task.isCompleted) return;
 
         const duration = getDurationMinutes(task);
         // Sürükleme katmanı zaten 15dk adımı uygular; mutlak dakikayı zorla
@@ -456,7 +470,7 @@ export const useTaskStore = create<TaskStore>()(
       resizeTask: (id, edge, minute) => {
         const state = get();
         const task = state.tasks.find((t) => t.id === id);
-        if (!task) return;
+        if (!task || task.isCompleted) return;
 
         const targetMinute = Math.round(minute);
         const start = getStartMinutes(task);

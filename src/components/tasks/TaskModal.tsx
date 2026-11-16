@@ -226,6 +226,7 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
                   id="task-start"
                   label="Başlangıç"
                   value={form.start}
+                  disabled={form.isCompleted}
                   onChange={handleStartMinutes}
                 />
               </div>
@@ -236,10 +237,16 @@ function TaskEditorDialog({ heading, submitLabel, taskId, initial }: DialogProps
                   label="Bitiş"
                   value={form.end}
                   allowEndOfDay
+                  disabled={form.isCompleted}
                   onChange={handleEndMinutes}
                 />
               </div>
             </div>
+            {form.isCompleted && (
+              <p className="text-[11px] text-muted-foreground">
+                Tamamlanan bloğun saatleri kilitli — düzenlemek için alttan &ldquo;Tamamlandı&rdquo; tikini kaldır.
+              </p>
+            )}
             {!isRangeValid && (
               <p className="text-xs font-medium text-destructive">
                 Bitiş saati başlangıç saatinden sonra olmalı.

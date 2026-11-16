@@ -231,6 +231,30 @@ describe('reflow — tampon algoritması', () => {
     expect(sonuc.shiftedTaskIds).toEqual([]);
   });
 
+  it('tamamlanmış görevleri ileri veya geri kaydırmaz', () => {
+    const forward = reflow(
+      [
+        gorev('aktif', '09:00', 90),
+        gorev('bitti', '10:00', 60, { isCompleted: true, title: 'Paragraf' }),
+      ],
+      'aktif',
+    );
+    expect(harita(forward.tasks)).toEqual({ aktif: '09:00-10:30', bitti: '10:00-11:00' });
+    expect(forward.conflict).toContain('Paragraf');
+    expect(forward.conflict).toContain('tamamlandığı için');
+
+    const backward = reflow(
+      [
+        gorev('bitti', '09:00', 60, { isCompleted: true, title: 'Geometri' }),
+        gorev('aktif', '09:30', 60),
+      ],
+      'aktif',
+    );
+    expect(harita(backward.tasks)).toEqual({ bitti: '09:00-10:00', aktif: '09:30-10:30' });
+    expect(backward.conflict).toContain('Geometri');
+    expect(backward.conflict).toContain('tamamlandığı için');
+  });
+
   it('bilinmeyen çapa id gelirse listeyi olduğu gibi döndürür', () => {
     const tasks = [gorev('a', '09:00', 60)];
     const sonuc = reflow(tasks, 'olmayan');

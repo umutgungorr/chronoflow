@@ -319,3 +319,32 @@ describe('canlı odak oturumu', () => {
     expect(goal?.isCompleted).toBe(true);
   });
 });
+
+describe('tamamlanan blok koruması', () => {
+  it('tamamlanan bloğu taşımaz ve süresini değiştirmez', () => {
+    kur([gorev('done', '09:00', 60, { isCompleted: true })]);
+
+    useTaskStore.getState().moveTask('done', 11 * 60);
+    useTaskStore.getState().resizeTask('done', 'end', 12 * 60);
+    useTaskStore.getState().updateTask('done', {
+      startTime: new Date(2026, 7, 15, 11, 0),
+      endTime: new Date(2026, 7, 15, 12, 0),
+    });
+
+    const t = gorevler()[0]!;
+    expect(getStartMinutes(t)).toBe(9 * 60);
+    expect(getEndMinutes(t)).toBe(10 * 60);
+  });
+
+  it('tamamlandı tiki kaldırılınca saatleri yeniden düzenlenebilir', () => {
+    kur([gorev('done', '09:00', 60, { isCompleted: true })]);
+
+    useTaskStore.getState().toggleComplete('done');
+    useTaskStore.getState().moveTask('done', 11 * 60);
+
+    const t = gorevler()[0]!;
+    expect(t.isCompleted).toBe(false);
+    expect(getStartMinutes(t)).toBe(11 * 60);
+    expect(getEndMinutes(t)).toBe(12 * 60);
+  });
+});

@@ -74,25 +74,31 @@ export function TaskBlock({
   const top = minutesToY(start, startMinute);
   const height = durationToPx(duration);
 
+  const isLocked = task.isCompleted;
+
   // Gövde: taşıma tutamacı. Tutamaçlar KARDEŞ elemanlar — iç içe olsalardı
   // pointerdown olayı iki sensörü birden tetiklerdi.
+  // Tamamlanan bloklar yanlışlıkla sürüklenip kaymasın diye kilitli kalır.
   const { setNodeRef: setMoveRef, listeners: moveListeners } = useDraggable({
     id: `${task.id}|move`,
     data: { taskId: task.id, mode: 'move' },
+    disabled: isLocked,
   });
   const { setNodeRef: setTopHandleRef, listeners: topHandleListeners } = useDraggable({
     id: `${task.id}|resize-start`,
     data: { taskId: task.id, mode: 'resize-start' },
+    disabled: isLocked,
   });
   const { setNodeRef: setBottomHandleRef, listeners: bottomHandleListeners } = useDraggable({
     id: `${task.id}|resize-end`,
     data: { taskId: task.id, mode: 'resize-end' },
+    disabled: isLocked,
   });
 
   const isDragging = preview !== null;
   const isCompact = duration < 30;
   const isUltraCompact = duration < 18;
-  const showTopHandle = duration >= TOP_HANDLE_MIN_DURATION;
+  const showTopHandle = !isLocked && duration >= TOP_HANDLE_MIN_DURATION;
 
   const startLabel = formatTime(fromDayMinutes(day, start));
   const endLabel = formatTime(fromDayMinutes(day, start + duration));
@@ -101,6 +107,7 @@ export function TaskBlock({
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = event.key === 'ArrowUp' ? -15 : event.key === 'ArrowDown' ? 15 : 0;
     if (step !== 0) {
+      if (isLocked) return;
       event.preventDefault();
       onNudge(task.id, event.shiftKey ? 'resize-end' : 'move', step);
       return;
@@ -111,6 +118,7 @@ export function TaskBlock({
       return;
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (isLocked) return;
       event.preventDefault();
       onDelete(task.id);
     }
@@ -123,7 +131,11 @@ export function TaskBlock({
     <div
       role="button"
       tabIndex={0}
-      aria-label={`${task.title}, ${formatRange(task)}. Enter ile düzenle, ok tuşlarıyla taşı, Shift+ok ile süreyi değiştir.`}
+      aria-label={
+        isLocked
+          ? `${task.title}, ${formatRange(task)}. Tamamlandı ve konumu kilitli.`
+          : `${task.title}, ${formatRange(task)}. Enter ile düzenle, ok tuşlarıyla taşı, Shift+ok ile süreyi değiştir.`
+      }
       aria-pressed={isSelected}
       onKeyDown={handleKeyDown}
       style={{
@@ -180,9 +192,10 @@ export function TaskBlock({
         onClick={() => onSelect(task.id)}
         onDoubleClick={() => onOpen(task.id)}
         className={cn(
-          'flex min-h-0 flex-1 touch-none items-center justify-between gap-2 overflow-hidden',
+          'flex min-h-0 flex-1 items-center justify-between gap-2 overflow-hidden',
+          !isLocked && 'touch-none',
           isUltraCompact ? 'pl-2.5 pr-2' : 'gap-3 pl-4 pr-3.5',
-          isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          isLocked ? 'cursor-default' : isDragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
       >
         <div className={cn('flex min-w-0 flex-1 items-center', isUltraCompact ? 'gap-2' : 'gap-3')}>
@@ -306,21 +319,23 @@ export function TaskBlock({
       </div>
 
       {/* Alt tutamaç: süreyi uzatır/kısaltır. Üzerine gelince belirginleşir. */}
-      <div
-        ref={setBottomHandleRef}
-        {...bottomHandleListeners}
-        tabIndex={-1}
-        aria-hidden
-        style={{ height: HANDLE_PX }}
-        className="group/handle absolute inset-x-0 bottom-0 z-20 flex cursor-ns-resize touch-none items-center justify-center"
-      >
-        <span
-          className={cn(
-            'h-[2px] w-6 rounded-full bg-foreground/25 transition-opacity',
-            isDragging ? 'opacity-100' : 'opacity-0 group-hover/handle:opacity-100',
-          )}
-        />
-      </div>
+      {!isLocked && (
+        <div
+          ref={setBottomHandleRef}
+          {...bottomHandleListeners}
+          tabIndex={-1}
+          aria-hidden
+          style={{ height: HANDLE_PX }}
+          className="group/handle absolute inset-x-0 bottom-0 z-20 flex cursor-ns-resize touch-none items-center justify-center"
+        >
+          <span
+            className={cn(
+              'h-[2px] w-6 rounded-full bg-foreground/25 transition-opacity',
+              isDragging ? 'opacity-100' : 'opacity-0 group-hover/handle:opacity-100',
+            )}
+          />
+        </div>
+      )}
 
       {/* Sürüklerken canlı saat rozeti: hangi dakikaya yapıştığını söyler. */}
       {isDragging && (
